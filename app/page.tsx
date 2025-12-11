@@ -7,10 +7,16 @@ import Totais from './components/Totais';
 import CurvaSChart from './components/CurvaSChart';
 import ModalContrato from './components/ModalContrato';
 import ModalUsuario from './components/ModalUsuario';
+import Spinner from './components/Spinner';
+import LoginForm from './components/LoginForm';
+import GerenciamentoUsuarios from './components/GerenciamentoUsuarios';
+import { useAuth } from './contexts/AuthContext';
 import { Servico, ServicoFormData, Contrato, Usuario } from './types';
 import { usuariosApi, contratosApi, servicosApi } from './services/api';
 
 export default function Home() {
+  const { usuario: usuarioLogado, token, loading: authLoading, login, logout, isAdmin } = useAuth();
+  const [mostrarGerenciamentoUsuarios, setMostrarGerenciamentoUsuarios] = useState(false);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [usuarioAtualId, setUsuarioAtualId] = useState<string | null>(null);
   const [contratos, setContratos] = useState<Contrato[]>([]);
@@ -22,22 +28,27 @@ export default function Home() {
   const [contratoEditando, setContratoEditando] = useState<Contrato | null>(null);
   const [modoVisualizacao, setModoVisualizacao] = useState<'percentual' | 'real'>('percentual');
   const [loading, setLoading] = useState(true);
+  const [salvando, setSalvando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Configurar usuário atual baseado no login
+  useEffect(() => {
+    if (usuarioLogado) {
+      setUsuarioAtualId(usuarioLogado.id);
+    }
+  }, [usuarioLogado]);
 
   // Carregar usuários do backend
   useEffect(() => {
     const carregarUsuarios = async () => {
+      if (!usuarioLogado) {
+        setLoading(false);
+        return;
+      }
+      
       try {
         const usuariosCarregados = await usuariosApi.listar();
         setUsuarios(usuariosCarregados);
-        
-        // Tentar recuperar usuário atual do localStorage (apenas o ID)
-        const usuarioAtualArmazenado = localStorage.getItem('usuarioAtualId');
-        if (usuarioAtualArmazenado && usuariosCarregados.find(u => u.id === usuarioAtualArmazenado)) {
-          setUsuarioAtualId(usuarioAtualArmazenado);
-        } else if (usuariosCarregados.length === 0) {
-          setMostrarModalUsuario(true);
-        }
       } catch (err) {
         console.error('Erro ao carregar usuários:', err);
         setError('Erro ao conectar com o servidor. Verifique se o backend está rodando.');
@@ -47,19 +58,12 @@ export default function Home() {
     };
 
     carregarUsuarios();
-  }, []);
-
-  // Salvar usuário atual no localStorage
-  useEffect(() => {
-    if (usuarioAtualId) {
-      localStorage.setItem('usuarioAtualId', usuarioAtualId);
-    }
-  }, [usuarioAtualId]);
+  }, [usuarioLogado]);
 
   // Carregar contratos do usuário atual
   useEffect(() => {
     const carregarContratos = async () => {
-      if (!usuarioAtualId) {
+      if (!usuarioAtualId || !usuarioLogado) {
         setContratos([]);
         setContratoAtualId(null);
         return;
@@ -78,7 +82,7 @@ export default function Home() {
     };
 
     carregarContratos();
-  }, [usuarioAtualId]);
+  }, [usuarioAtualId, usuarioLogado]);
 
   // Carregar contrato completo (com serviços) quando selecionado
   useEffect(() => {
@@ -189,6 +193,7 @@ export default function Home() {
       return;
     }
 
+    setSalvando(true);
     try {
       if (editandoIndex !== null) {
         const servicoId = servicos[editandoIndex].id;
@@ -206,10 +211,12 @@ export default function Home() {
           medicoes: servicoData.medicoes,
         });
       }
-      recarregarContrato();
+      await recarregarContrato();
     } catch (err) {
       console.error('Erro ao salvar serviço:', err);
       alert('Erro ao salvar serviço');
+    } finally {
+      setSalvando(false);
     }
   };
 
@@ -224,13 +231,16 @@ export default function Home() {
 
   const handleDelete = async (index: number) => {
     if (confirm('Tem certeza que deseja excluir este serviço?')) {
+      setSalvando(true);
       try {
         const servicoId = servicos[index].id;
         await servicosApi.deletar(servicoId);
-        recarregarContrato();
+        await recarregarContrato();
       } catch (err) {
         console.error('Erro ao deletar serviço:', err);
         alert('Erro ao deletar serviço');
+      } finally {
+        setSalvando(false);
       }
     }
   };
@@ -244,11 +254,14 @@ export default function Home() {
       [field]: valor,
     };
     
+    setSalvando(true);
     try {
       await servicosApi.atualizarMedicao(servico.id, medicaoIndex, medicaoAtualizada);
-      recarregarContrato();
+      await recarregarContrato();
     } catch (err) {
       console.error('Erro ao atualizar medição:', err);
+    } finally {
+      setSalvando(false);
     }
   };
 
@@ -258,6 +271,7 @@ export default function Home() {
       return;
     }
 
+    setSalvando(true);
     try {
       if (contratoEditando) {
         // Editar contrato existente
@@ -273,7 +287,7 @@ export default function Home() {
         // Recarregar contratos
         const contratosAtualizados = await contratosApi.listar(usuarioAtualId);
         setContratos(contratosAtualizados);
-        recarregarContrato();
+        await recarregarContrato();
       } else {
         // Criar novo contrato
         const novoContrato = await contratosApi.criar({
@@ -292,10 +306,13 @@ export default function Home() {
     } catch (err) {
       console.error('Erro ao salvar contrato:', err);
       alert('Erro ao salvar contrato');
+    } finally {
+      setSalvando(false);
     }
   };
 
   const handleCriarUsuario = async (nome: string, email: string, empresa: string) => {
+    setSalvando(true);
     try {
       const novoUsuario = await usuariosApi.criar({
         nome,
@@ -308,6 +325,8 @@ export default function Home() {
     } catch (err) {
       console.error('Erro ao criar usuário:', err);
       alert('Erro ao criar usuário');
+    } finally {
+      setSalvando(false);
     }
   };
 
@@ -325,6 +344,7 @@ export default function Home() {
 
   const handleDeletarContrato = async (contratoId: string) => {
     if (confirm('Tem certeza que deseja excluir este contrato? Todos os serviços serão perdidos!')) {
+      setSalvando(true);
       try {
         await contratosApi.deletar(contratoId);
         const novosContratos = contratos.filter(c => c.id !== contratoId);
@@ -335,6 +355,8 @@ export default function Home() {
       } catch (err) {
         console.error('Erro ao deletar contrato:', err);
         alert('Erro ao deletar contrato');
+      } finally {
+        setSalvando(false);
       }
     }
   };
@@ -393,6 +415,25 @@ export default function Home() {
     }
   };
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-100 via-blue-50 to-green-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Verificando autenticação...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!usuarioLogado) {
+    return <LoginForm onLogin={login} />;
+  }
+
+  if (mostrarGerenciamentoUsuarios && isAdmin) {
+    return <GerenciamentoUsuarios onVoltar={() => setMostrarGerenciamentoUsuarios(false)} />;
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-purple-100 via-blue-50 to-green-50 flex items-center justify-center">
@@ -423,6 +464,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-100 via-blue-50 to-green-50">
+      {/* Spinner de salvamento */}
+      {salvando && <Spinner message="Salvando..." />}
+      
       {/* Header */}
       <header className="bg-gradient-to-r from-purple-600 to-blue-600 text-white shadow-lg">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
@@ -431,21 +475,29 @@ export default function Home() {
               <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold">📊 Cronograma de Atividades</h1>
               <p className="text-purple-100 mt-1 sm:mt-2 text-sm sm:text-base">Sistema de Gestão com Curva S</p>
             </div>
-            {usuarioAtual && (
-              <div className="bg-white/10 backdrop-blur-sm px-4 sm:px-6 py-2 sm:py-3 rounded-lg w-full sm:w-auto">
-                <div className="text-xs sm:text-sm text-purple-100">Usuário:</div>
-                <div className="font-semibold text-base sm:text-lg">{usuarioAtual.nome}</div>
-                {usuarioAtual.empresa && (
-                  <div className="text-xs sm:text-sm text-purple-100">🏢 {usuarioAtual.empresa}</div>
+            <div className="bg-white/10 backdrop-blur-sm px-4 sm:px-6 py-2 sm:py-3 rounded-lg w-full sm:w-auto">
+              <div className="text-xs sm:text-sm text-purple-100">Usuário:</div>
+              <div className="font-semibold text-base sm:text-lg">{usuarioLogado.nome}</div>
+              {usuarioLogado.empresa && (
+                <div className="text-xs sm:text-sm text-purple-100">🏢 {usuarioLogado.empresa}</div>
+              )}
+              <div className="flex flex-wrap gap-2 mt-2">
+                {isAdmin && (
+                  <button
+                    onClick={() => setMostrarGerenciamentoUsuarios(true)}
+                    className="text-xs bg-purple-500 hover:bg-purple-600 px-3 py-1 rounded transition"
+                  >
+                    👥 Usuários
+                  </button>
                 )}
                 <button
-                  onClick={() => setMostrarModalUsuario(true)}
-                  className="mt-2 text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded transition"
+                  onClick={logout}
+                  className="text-xs bg-red-500/80 hover:bg-red-600 px-3 py-1 rounded transition"
                 >
-                  Trocar Usuário
+                  🚪 Sair
                 </button>
               </div>
-            )}
+            </div>
           </div>
         </div>
       </header>
