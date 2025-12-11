@@ -13,6 +13,7 @@ interface UsuarioDto {
 
 interface MedicaoDto {
   id: string;
+  ordem: number;
   mes: string;
   previsto: number;
   realizado: number;
@@ -238,10 +239,15 @@ export const servicosApi = {
     contratoId: string;
     medicoes: { mes: string; previsto: number; realizado: number; pago: number }[];
   }): Promise<Servico> {
+    // Adicionar ordem às medições
+    const servicoComOrdem = {
+      ...servico,
+      medicoes: servico.medicoes.map((m, index) => ({ ...m, ordem: index })),
+    };
     const response = await fetch(`${API_BASE_URL}/servicos`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(servico),
+      body: JSON.stringify(servicoComOrdem),
     });
     if (!response.ok) throw new Error('Erro ao criar serviço');
     const data: ServicoDto = await response.json();
@@ -253,10 +259,15 @@ export const servicosApi = {
     servico: string;
     medicoes: { mes: string; previsto: number; realizado: number; pago: number }[];
   }): Promise<void> {
+    // Adicionar ordem às medições
+    const servicoComOrdem = {
+      ...servico,
+      medicoes: servico.medicoes.map((m, index) => ({ ...m, ordem: index })),
+    };
     const response = await fetch(`${API_BASE_URL}/servicos/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(servico),
+      body: JSON.stringify(servicoComOrdem),
     });
     if (!response.ok) throw new Error('Erro ao atualizar serviço');
   },
@@ -267,10 +278,12 @@ export const servicosApi = {
     realizado: number;
     pago: number;
   }): Promise<void> {
+    // Adicionar ordem à medição
+    const medicaoComOrdem = { ...medicao, ordem: medicaoIndex };
     const response = await fetch(`${API_BASE_URL}/servicos/${servicoId}/medicoes/${medicaoIndex}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(medicao),
+      body: JSON.stringify(medicaoComOrdem),
     });
     if (!response.ok) throw new Error('Erro ao atualizar medição');
   },
