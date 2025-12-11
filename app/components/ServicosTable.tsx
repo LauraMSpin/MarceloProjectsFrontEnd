@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { Servico } from '../types';
 import { useState } from 'react';
 
@@ -81,6 +82,26 @@ export default function ServicosTable({
   // Calcular valor total geral de todos os serviços
   const valorTotalGeral = servicos.reduce((sum, servico) => sum + servico.valorTotal, 0);
 
+  // Ordenar serviços por item (ordem numérica considerando formatos como "1", "1.1", "2", etc.)
+  const servicosOrdenados = [...servicos].sort((a, b) => {
+    const parseItem = (item: string) => {
+      return item.split('.').map(part => {
+        const num = parseFloat(part);
+        return isNaN(num) ? 0 : num;
+      });
+    };
+    
+    const partsA = parseItem(a.item);
+    const partsB = parseItem(b.item);
+    
+    for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+      const numA = partsA[i] || 0;
+      const numB = partsB[i] || 0;
+      if (numA !== numB) return numA - numB;
+    }
+    return 0;
+  });
+
   return (
     <div className="bg-white rounded-xl shadow-lg overflow-hidden">
       {/* Botão de alternância de visualização */}
@@ -138,18 +159,19 @@ export default function ServicosTable({
           </thead>
           
           <tbody>
-            {servicos.map((servico, index) => {
+            {servicosOrdenados.map((servico, displayIndex) => {
+              // Encontrar o índice original para as funções de callback
+              const originalIndex = servicos.findIndex(s => s.id === servico.id);
               const percentualParticipacao = valorTotalGeral > 0 
                 ? (servico.valorTotal / valorTotalGeral) * 100 
                 : 0;
               
-              const bgColor = index % 2 === 0 ? 'bg-white' : 'bg-gray-50';
+              const bgColor = displayIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50';
               
               return (
-                <>
+                <React.Fragment key={servico.id}>
                   {/* Linha PREVISTO */}
                   <tr
-                    key={`${servico.id}-previsto`}
                     className={`hover:bg-blue-50 transition ${bgColor}`}
                   >
                     <td className={`px-4 py-2 text-sm text-center font-medium border ${bgColor}`} rowSpan={3}>
@@ -186,7 +208,7 @@ export default function ServicosTable({
                     </td>
                     
                     {servico.medicoes.map((medicao, mIndex) => {
-                      const editandoPrevisto = editandoCelula?.servicoIndex === index && 
+                      const editandoPrevisto = editandoCelula?.servicoIndex === originalIndex && 
                                               editandoCelula?.medicaoIndex === mIndex && 
                                               editandoCelula?.field === 'previsto';
                       
@@ -199,7 +221,7 @@ export default function ServicosTable({
                         <td
                           key={`p-${mIndex}`}
                           className="px-2 py-1 text-sm text-center bg-blue-50 font-semibold text-blue-800 cursor-pointer hover:bg-blue-100 transition border"
-                          onClick={() => !editandoCelula && handleIniciarEdicao(index, mIndex, 'previsto', medicao.previsto)}
+                          onClick={() => !editandoCelula && handleIniciarEdicao(originalIndex, mIndex, 'previsto', medicao.previsto)}
                         >
                           {editandoPrevisto ? (
                             <input
@@ -234,14 +256,14 @@ export default function ServicosTable({
                     <td className={`px-4 py-2 text-sm text-center border ${bgColor}`} rowSpan={3}>
                       <div className="flex gap-2 justify-center">
                         <button
-                          onClick={() => onEdit(index)}
+                          onClick={() => onEdit(originalIndex)}
                           className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-xs font-semibold transition transform hover:scale-105"
                           title="Editar"
                         >
                           ✏️
                         </button>
                         <button
-                          onClick={() => onDelete(index)}
+                          onClick={() => onDelete(originalIndex)}
                           className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs font-semibold transition transform hover:scale-105"
                           title="Excluir"
                         >
@@ -261,7 +283,7 @@ export default function ServicosTable({
                     </td>
                     
                     {servico.medicoes.map((medicao, mIndex) => {
-                      const editandoRealizado = editandoCelula?.servicoIndex === index && 
+                      const editandoRealizado = editandoCelula?.servicoIndex === originalIndex && 
                                                editandoCelula?.medicaoIndex === mIndex && 
                                                editandoCelula?.field === 'realizado';
                       
@@ -274,7 +296,7 @@ export default function ServicosTable({
                         <td
                           key={`r-${mIndex}`}
                           className="px-2 py-1 text-sm text-center bg-green-50 font-semibold text-green-800 cursor-pointer hover:bg-green-100 transition border"
-                          onClick={() => !editandoCelula && handleIniciarEdicao(index, mIndex, 'realizado', medicao.realizado)}
+                          onClick={() => !editandoCelula && handleIniciarEdicao(originalIndex, mIndex, 'realizado', medicao.realizado)}
                         >
                           {editandoRealizado ? (
                             <input
@@ -314,7 +336,7 @@ export default function ServicosTable({
                     </td>
                     
                     {servico.medicoes.map((medicao, mIndex) => {
-                      const editandoPago = editandoCelula?.servicoIndex === index && 
+                      const editandoPago = editandoCelula?.servicoIndex === originalIndex && 
                                           editandoCelula?.medicaoIndex === mIndex && 
                                           editandoCelula?.field === 'pago';
                       
@@ -327,7 +349,7 @@ export default function ServicosTable({
                         <td
                           key={`pg-${mIndex}`}
                           className="px-2 py-1 text-sm text-center bg-orange-50 font-semibold text-orange-800 cursor-pointer hover:bg-orange-100 transition border"
-                          onClick={() => !editandoCelula && handleIniciarEdicao(index, mIndex, 'pago', medicao.pago || 0)}
+                          onClick={() => !editandoCelula && handleIniciarEdicao(originalIndex, mIndex, 'pago', medicao.pago || 0)}
                         >
                           {editandoPago ? (
                             <input
@@ -356,7 +378,7 @@ export default function ServicosTable({
                       );
                     })}
                   </tr>
-                </>
+                </React.Fragment>
               );
             })}
           </tbody>
