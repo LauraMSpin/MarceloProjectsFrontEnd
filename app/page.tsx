@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import ServicoForm from './components/ServicoForm';
 import ServicosTable from './components/ServicosTable';
 import Totais from './components/Totais';
@@ -8,79 +8,115 @@ import CurvaSChart from './components/CurvaSChart';
 import ModalContrato from './components/ModalContrato';
 import ModalUsuario from './components/ModalUsuario';
 import { Servico, ServicoFormData, Contrato, Usuario } from './types';
+import { usuariosApi, contratosApi, servicosApi } from './services/api';
 
 export default function Home() {
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [usuarioAtualId, setUsuarioAtualId] = useState<string | null>(null);
   const [contratos, setContratos] = useState<Contrato[]>([]);
   const [contratoAtualId, setContratoAtualId] = useState<string | null>(null);
+  const [contratoAtual, setContratoAtual] = useState<Contrato | null>(null);
   const [editandoIndex, setEditandoIndex] = useState<number | null>(null);
   const [mostrarModalContrato, setMostrarModalContrato] = useState(false);
   const [mostrarModalUsuario, setMostrarModalUsuario] = useState(false);
   const [contratoEditando, setContratoEditando] = useState<Contrato | null>(null);
   const [modoVisualizacao, setModoVisualizacao] = useState<'percentual' | 'real'>('percentual');
-  
-  // Carregar usuários do localStorage
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Carregar usuários do backend
   useEffect(() => {
-    const usuariosArmazenados = localStorage.getItem('usuarios');
-    if (usuariosArmazenados) {
-      const usuariosCarregados = JSON.parse(usuariosArmazenados);
-      setUsuarios(usuariosCarregados);
-    }
-    
-    const usuarioAtualArmazenado = localStorage.getItem('usuarioAtualId');
-    if (usuarioAtualArmazenado) {
-      setUsuarioAtualId(usuarioAtualArmazenado);
-    } else if (!usuariosArmazenados || JSON.parse(usuariosArmazenados).length === 0) {
-      // Se não tem usuário, mostrar modal
-      setMostrarModalUsuario(true);
-    }
+    const carregarUsuarios = async () => {
+      try {
+        const usuariosCarregados = await usuariosApi.listar();
+        setUsuarios(usuariosCarregados);
+        
+        // Tentar recuperar usuário atual do localStorage (apenas o ID)
+        const usuarioAtualArmazenado = localStorage.getItem('usuarioAtualId');
+        if (usuarioAtualArmazenado && usuariosCarregados.find(u => u.id === usuarioAtualArmazenado)) {
+          setUsuarioAtualId(usuarioAtualArmazenado);
+        } else if (usuariosCarregados.length === 0) {
+          setMostrarModalUsuario(true);
+        }
+      } catch (err) {
+        console.error('Erro ao carregar usuários:', err);
+        setError('Erro ao conectar com o servidor. Verifique se o backend está rodando.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    carregarUsuarios();
   }, []);
 
-  // Salvar usuários no localStorage
-  useEffect(() => {
-    if (usuarios.length > 0) {
-      localStorage.setItem('usuarios', JSON.stringify(usuarios));
-    }
-  }, [usuarios]);
-
-  // Salvar usuário atual
+  // Salvar usuário atual no localStorage
   useEffect(() => {
     if (usuarioAtualId) {
       localStorage.setItem('usuarioAtualId', usuarioAtualId);
     }
   }, [usuarioAtualId]);
 
-  // Carregar contratos do localStorage
+  // Carregar contratos do usuário atual
   useEffect(() => {
-    const contratosArmazenados = localStorage.getItem('contratos');
-    if (contratosArmazenados) {
-      const contratosCarregados = JSON.parse(contratosArmazenados);
-      setContratos(contratosCarregados);
-      // Carregar primeiro contrato do usuário atual
-      if (usuarioAtualId) {
-        const contratoUsuario = contratosCarregados.find((c: Contrato) => c.usuarioId === usuarioAtualId);
-        if (contratoUsuario) {
-          setContratoAtualId(contratoUsuario.id);
-        }
+    const carregarContratos = async () => {
+      if (!usuarioAtualId) {
+        setContratos([]);
+        setContratoAtualId(null);
+        return;
       }
-    }
+
+      try {
+        const contratosCarregados = await contratosApi.listar(usuarioAtualId);
+        setContratos(contratosCarregados);
+        
+        if (contratosCarregados.length > 0 && !contratoAtualId) {
+          setContratoAtualId(contratosCarregados[0].id);
+        }
+      } catch (err) {
+        console.error('Erro ao carregar contratos:', err);
+      }
+    };
+
+    carregarContratos();
   }, [usuarioAtualId]);
 
-  // Salvar contratos no localStorage
+  // Carregar contrato completo (com serviços) quando selecionado
   useEffect(() => {
-    if (contratos.length > 0) {
-      localStorage.setItem('contratos', JSON.stringify(contratos));
-    }
-  }, [contratos]);
+    const carregarContratoCompleto = async () => {
+      if (!contratoAtualId) {
+        setContratoAtual(null);
+        return;
+      }
+
+      try {
+        const contrato = await contratosApi.buscar(contratoAtualId);
+        setContratoAtual(contrato);
+      } catch (err) {
+        console.error('Erro ao carregar contrato:', err);
+        setContratoAtual(null);
+      }
+    };
+
+    carregarContratoCompleto();
+  }, [contratoAtualId]);
 
   const usuarioAtual = usuarios.find(u => u.id === usuarioAtualId);
   const contratosDoUsuario = contratos.filter(c => c.usuarioId === usuarioAtualId);
-  const contratoAtual = contratosDoUsuario.find(c => c.id === contratoAtualId);
   const servicos = contratoAtual?.servicos || [];
   const numeroMeses = contratoAtual?.numeroMeses || 12;
   const mesInicial = contratoAtual?.mesInicial || new Date().getMonth() + 1;
   const anoInicial = contratoAtual?.anoInicial || new Date().getFullYear();
+
+  // Recarregar contrato atual
+  const recarregarContrato = useCallback(async () => {
+    if (!contratoAtualId) return;
+    try {
+      const contrato = await contratosApi.buscar(contratoAtualId);
+      setContratoAtual(contrato);
+    } catch (err) {
+      console.error('Erro ao recarregar contrato:', err);
+    }
+  }, [contratoAtualId]);
 
   // Função para ajustar medições (definida antes do useEffect)
   const ajustarMedicoesServicos = (servicos: Servico[], novoNumeroMeses: number): Servico[] => {
@@ -117,51 +153,63 @@ export default function Home() {
 
   // Sincronizar medições dos serviços com o número de meses do contrato
   useEffect(() => {
-    if (contratoAtual && contratoAtual.servicos.length > 0) {
-      const precisaAjustar = contratoAtual.servicos.some(
-        servico => servico.medicoes.length !== contratoAtual.numeroMeses
-      );
-      
-      if (precisaAjustar) {
-        const servicosAjustados = ajustarMedicoesServicos(contratoAtual.servicos, contratoAtual.numeroMeses);
-        setContratos(contratos.map(c => 
-          c.id === contratoAtual.id ? { ...c, servicos: servicosAjustados } : c
-        ));
+    const ajustarMedicoes = async () => {
+      if (contratoAtual && contratoAtual.servicos.length > 0) {
+        const precisaAjustar = contratoAtual.servicos.some(
+          servico => servico.medicoes.length !== contratoAtual.numeroMeses
+        );
+        
+        if (precisaAjustar) {
+          // Ajustar cada serviço no backend
+          for (const servico of contratoAtual.servicos) {
+            if (servico.medicoes.length !== contratoAtual.numeroMeses) {
+              const medicoesAjustadas = ajustarMedicoesServicos([servico], contratoAtual.numeroMeses)[0].medicoes;
+              try {
+                await servicosApi.atualizar(servico.id, {
+                  item: servico.item,
+                  servico: servico.servico,
+                  medicoes: medicoesAjustadas,
+                });
+              } catch (err) {
+                console.error('Erro ao ajustar medições:', err);
+              }
+            }
+          }
+          recarregarContrato();
+        }
       }
-    }
-  }, [contratoAtualId, contratoAtual?.numeroMeses]);
+    };
+    
+    ajustarMedicoes();
+  }, [contratoAtualId, contratoAtual?.numeroMeses, recarregarContrato]);
 
-  const atualizarServicosContrato = (novosServicos: Servico[]) => {
-    if (!contratoAtualId) return;
-    setContratos(contratos.map(c => 
-      c.id === contratoAtualId ? { ...c, servicos: novosServicos } : c
-    ));
-  };
-
-  const handleAddServico = (servicoData: ServicoFormData) => {
+  const handleAddServico = async (servicoData: ServicoFormData) => {
     if (!contratoAtualId) {
       alert('Por favor, crie ou selecione um contrato primeiro!');
       return;
     }
 
-    const valorTotal = servicoData.medicoes.reduce((sum, medicao) => sum + medicao.previsto, 0);
-    
-    if (editandoIndex !== null) {
-      const servicosAtualizados = [...servicos];
-      servicosAtualizados[editandoIndex] = {
-        id: servicos[editandoIndex].id,
-        ...servicoData,
-        valorTotal,
-      };
-      atualizarServicosContrato(servicosAtualizados);
-      setEditandoIndex(null);
-    } else {
-      const novoServico: Servico = {
-        id: Date.now().toString(),
-        ...servicoData,
-        valorTotal,
-      };
-      atualizarServicosContrato([...servicos, novoServico]);
+    try {
+      if (editandoIndex !== null) {
+        const servicoId = servicos[editandoIndex].id;
+        await servicosApi.atualizar(servicoId, {
+          item: servicoData.item,
+          servico: servicoData.servico,
+          medicoes: servicoData.medicoes,
+        });
+        setEditandoIndex(null);
+      } else {
+        await servicosApi.criar({
+          item: servicoData.item,
+          servico: servicoData.servico,
+          contratoId: contratoAtualId,
+          medicoes: servicoData.medicoes,
+        });
+      }
+      recarregarContrato();
+    } catch (err) {
+      console.error('Erro ao salvar serviço:', err);
+      alert('Erro ao salvar serviço');
     }
   };
 
@@ -174,78 +222,93 @@ export default function Home() {
     setEditandoIndex(null);
   };
 
-  const handleDelete = (index: number) => {
+  const handleDelete = async (index: number) => {
     if (confirm('Tem certeza que deseja excluir este serviço?')) {
-      const novosServicos = servicos.filter((_, i) => i !== index);
-      atualizarServicosContrato(novosServicos);
+      try {
+        const servicoId = servicos[index].id;
+        await servicosApi.deletar(servicoId);
+        recarregarContrato();
+      } catch (err) {
+        console.error('Erro ao deletar serviço:', err);
+        alert('Erro ao deletar serviço');
+      }
     }
   };
 
-  const handleUpdateMedicao = (servicoIndex: number, medicaoIndex: number, field: 'previsto' | 'realizado' | 'pago', valor: number) => {
-    const servicosAtualizados = [...servicos];
-    const servico = { ...servicosAtualizados[servicoIndex] };
-    const medicoes = [...servico.medicoes];
+  const handleUpdateMedicao = async (servicoIndex: number, medicaoIndex: number, field: 'previsto' | 'realizado' | 'pago', valor: number) => {
+    const servico = servicos[servicoIndex];
+    const medicao = servico.medicoes[medicaoIndex];
     
-    medicoes[medicaoIndex] = {
-      ...medicoes[medicaoIndex],
+    const medicaoAtualizada = {
+      ...medicao,
       [field]: valor,
     };
     
-    servico.medicoes = medicoes;
-    // Recalcular valor total baseado nos valores previstos
-    servico.valorTotal = medicoes.reduce((sum, medicao) => sum + medicao.previsto, 0);
-    
-    servicosAtualizados[servicoIndex] = servico;
-    atualizarServicosContrato(servicosAtualizados);
+    try {
+      await servicosApi.atualizarMedicao(servico.id, medicaoIndex, medicaoAtualizada);
+      recarregarContrato();
+    } catch (err) {
+      console.error('Erro ao atualizar medição:', err);
+    }
   };
 
-  const handleCriarContrato = (nome: string, descricao: string, numeroMeses: number, mesInicial: number, anoInicial: number) => {
+  const handleCriarContrato = async (nome: string, descricao: string, numeroMeses: number, mesInicial: number, anoInicial: number) => {
     if (!usuarioAtualId) {
       alert('Selecione um usuário primeiro!');
       return;
     }
 
-    if (contratoEditando) {
-      // Editar contrato existente
-      const contratoAtualizado = contratos.find(c => c.id === contratoEditando.id);
-      const servicosAjustados = contratoAtualizado ? ajustarMedicoesServicos(contratoAtualizado.servicos, numeroMeses) : [];
-      
-      setContratos(contratos.map(c => 
-        c.id === contratoEditando.id 
-          ? { ...c, nome, descricao, numeroMeses, mesInicial, anoInicial, servicos: servicosAjustados }
-          : c
-      ));
-      setContratoEditando(null);
-    } else {
-      // Criar novo contrato
-      const novoContrato: Contrato = {
-        id: Date.now().toString(),
-        nome,
-        descricao,
-        numeroMeses,
-        mesInicial,
-        anoInicial,
-        servicos: [],
-        dataCriacao: new Date().toISOString(),
-        usuarioId: usuarioAtualId,
-      };
-      setContratos([...contratos, novoContrato]);
-      setContratoAtualId(novoContrato.id);
+    try {
+      if (contratoEditando) {
+        // Editar contrato existente
+        await contratosApi.atualizar(contratoEditando.id, {
+          nome,
+          descricao,
+          numeroMeses,
+          mesInicial,
+          anoInicial,
+        });
+        setContratoEditando(null);
+        
+        // Recarregar contratos
+        const contratosAtualizados = await contratosApi.listar(usuarioAtualId);
+        setContratos(contratosAtualizados);
+        recarregarContrato();
+      } else {
+        // Criar novo contrato
+        const novoContrato = await contratosApi.criar({
+          nome,
+          descricao,
+          numeroMeses,
+          mesInicial,
+          anoInicial,
+          usuarioId: usuarioAtualId,
+        });
+        
+        setContratos([...contratos, novoContrato]);
+        setContratoAtualId(novoContrato.id);
+      }
+      setMostrarModalContrato(false);
+    } catch (err) {
+      console.error('Erro ao salvar contrato:', err);
+      alert('Erro ao salvar contrato');
     }
-    setMostrarModalContrato(false);
   };
 
-  const handleCriarUsuario = (nome: string, email: string, empresa: string) => {
-    const novoUsuario: Usuario = {
-      id: Date.now().toString(),
-      nome,
-      email,
-      empresa: empresa || undefined,
-      dataCriacao: new Date().toISOString(),
-    };
-    setUsuarios([...usuarios, novoUsuario]);
-    setUsuarioAtualId(novoUsuario.id);
-    setMostrarModalUsuario(false);
+  const handleCriarUsuario = async (nome: string, email: string, empresa: string) => {
+    try {
+      const novoUsuario = await usuariosApi.criar({
+        nome,
+        email,
+        empresa: empresa || undefined,
+      });
+      setUsuarios([...usuarios, novoUsuario]);
+      setUsuarioAtualId(novoUsuario.id);
+      setMostrarModalUsuario(false);
+    } catch (err) {
+      console.error('Erro ao criar usuário:', err);
+      alert('Erro ao criar usuário');
+    }
   };
 
   const handleSelecionarUsuario = (usuarioId: string) => {
@@ -260,21 +323,20 @@ export default function Home() {
     setMostrarModalContrato(true);
   };
 
-  const handleDeletarContrato = (contratoId: string) => {
+  const handleDeletarContrato = async (contratoId: string) => {
     if (confirm('Tem certeza que deseja excluir este contrato? Todos os serviços serão perdidos!')) {
-      const novosContratos = contratos.filter(c => c.id !== contratoId);
-      setContratos(novosContratos);
-      if (contratoAtualId === contratoId) {
-        setContratoAtualId(novosContratos.length > 0 ? novosContratos[0].id : null);
+      try {
+        await contratosApi.deletar(contratoId);
+        const novosContratos = contratos.filter(c => c.id !== contratoId);
+        setContratos(novosContratos);
+        if (contratoAtualId === contratoId) {
+          setContratoAtualId(novosContratos.length > 0 ? novosContratos[0].id : null);
+        }
+      } catch (err) {
+        console.error('Erro ao deletar contrato:', err);
+        alert('Erro ao deletar contrato');
       }
     }
-  };
-
-  const atualizarConfiguracoesContrato = (numeroMeses: number, mesInicial: number, anoInicial: number) => {
-    if (!contratoAtualId) return;
-    setContratos(contratos.map(c =>
-      c.id === contratoAtualId ? { ...c, numeroMeses, mesInicial, anoInicial } : c
-    ));
   };
 
   const handleExportarJSON = () => {
@@ -288,23 +350,76 @@ export default function Home() {
     link.click();
   };
 
-  const handleImportarJSON = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImportarJSON = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
+    if (file && usuarioAtualId) {
       const reader = new FileReader();
-      reader.onload = (e) => {
+      reader.onload = async (e) => {
         try {
           const contratoImportado = JSON.parse(e.target?.result as string);
-          contratoImportado.id = Date.now().toString();
-          setContratos([...contratos, contratoImportado]);
-          setContratoAtualId(contratoImportado.id);
+          
+          // Criar contrato no backend
+          const novoContrato = await contratosApi.criar({
+            nome: contratoImportado.nome,
+            descricao: contratoImportado.descricao,
+            numeroMeses: contratoImportado.numeroMeses,
+            mesInicial: contratoImportado.mesInicial,
+            anoInicial: contratoImportado.anoInicial,
+            usuarioId: usuarioAtualId,
+          });
+          
+          // Criar serviços do contrato importado
+          if (contratoImportado.servicos && Array.isArray(contratoImportado.servicos)) {
+            for (const servico of contratoImportado.servicos) {
+              await servicosApi.criar({
+                item: servico.item,
+                servico: servico.servico,
+                contratoId: novoContrato.id,
+                medicoes: servico.medicoes,
+              });
+            }
+          }
+          
+          // Recarregar lista de contratos
+          const contratosAtualizados = await contratosApi.listar(usuarioAtualId);
+          setContratos(contratosAtualizados);
+          setContratoAtualId(novoContrato.id);
         } catch (error) {
+          console.error('Erro ao importar:', error);
           alert('Erro ao importar arquivo JSON');
         }
       };
       reader.readAsText(file);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-100 via-blue-50 to-green-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-purple-100 via-blue-50 to-green-50 flex items-center justify-center">
+        <div className="text-center bg-white p-8 rounded-xl shadow-lg max-w-md">
+          <p className="text-red-600 text-lg mb-4">⚠️ {error}</p>
+          <p className="text-gray-600 text-sm">Verifique se o backend está rodando em http://localhost:5000</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-4 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition"
+          >
+            Tentar Novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-100 via-blue-50 to-green-50">
