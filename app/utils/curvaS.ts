@@ -1,0 +1,71 @@
+import { Servico, CurvaSData } from '../types';
+
+export function calcularCurvaS(servicos: Servico[], numMeses: number = 12): CurvaSData[] {
+  const dados: CurvaSData[] = [];
+  
+  // Inicializar arrays para cada mês
+  for (let i = 0; i < numMeses; i++) {
+    dados.push({
+      mes: `Mês ${i + 1}`,
+      previsto: 0,
+      realizado: 0,
+      pago: 0,
+      previstoAcumulado: 0,
+      realizadoAcumulado: 0,
+      pagoAcumulado: 0,
+    });
+  }
+
+  // Calcular valores mensais (valores já estão em reais)
+  servicos.forEach((servico) => {
+    servico.medicoes.forEach((medicao, index) => {
+      if (index < numMeses) {
+        dados[index].previsto += medicao.previsto;
+        dados[index].realizado += medicao.realizado;
+        dados[index].pago += medicao.pago || 0;
+      }
+    });
+  });
+
+  // Calcular acumulados
+  let previstoAcum = 0;
+  let realizadoAcum = 0;
+  let pagoAcum = 0;
+  
+  dados.forEach((dado) => {
+    previstoAcum += dado.previsto;
+    realizadoAcum += dado.realizado;
+    pagoAcum += dado.pago;
+    dado.previstoAcumulado = previstoAcum;
+    dado.realizadoAcumulado = realizadoAcum;
+    dado.pagoAcumulado = pagoAcum;
+  });
+
+  return dados;
+}
+
+export function calcularTotais(servicos: Servico[]) {
+  let totalPrevisto = 0;
+  let totalRealizado = 0;
+  let totalPago = 0;
+  let valorTotalGeral = 0;
+
+  servicos.forEach((servico) => {
+    valorTotalGeral += servico.valorTotal;
+    
+    servico.medicoes.forEach((medicao) => {
+      totalPrevisto += medicao.previsto;
+      totalRealizado += medicao.realizado;
+      totalPago += medicao.pago || 0;
+    });
+  });
+
+  return {
+    totalPrevisto,
+    totalRealizado,
+    totalPago,
+    valorTotalGeral,
+    percentualRealizado: totalPrevisto > 0 ? (totalRealizado / totalPrevisto) * 100 : 0,
+    percentualPago: totalRealizado > 0 ? (totalPago / totalRealizado) * 100 : 0,
+  };
+}
