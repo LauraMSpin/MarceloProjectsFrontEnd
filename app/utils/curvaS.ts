@@ -1,12 +1,22 @@
 import { Servico, CurvaSData, PagamentoMensal } from '../types';
+import { gerarMesesSequenciais } from './datas';
 
-export function calcularCurvaS(servicos: Servico[], numMeses: number = 12, pagamentosMensais: PagamentoMensal[] = []): CurvaSData[] {
+export function calcularCurvaS(
+  servicos: Servico[], 
+  numMeses: number = 12, 
+  pagamentosMensais: PagamentoMensal[] = [],
+  mesInicial: number = 1,
+  anoInicial: number = new Date().getFullYear()
+): CurvaSData[] {
   const dados: CurvaSData[] = [];
+  
+  // Gerar nomes dos meses reais
+  const nomesMeses = gerarMesesSequenciais(mesInicial, anoInicial, numMeses);
   
   // Inicializar arrays para cada mês
   for (let i = 0; i < numMeses; i++) {
     dados.push({
-      mes: `Mês ${i + 1}`,
+      mes: nomesMeses[i],
       previsto: 0,
       realizado: 0,
       pago: 0,

@@ -722,6 +722,8 @@ export default function Home() {
             onUpdatePagamento={handleUpdatePagamento}
             pagamentosMensais={contratoAtual?.pagamentosMensais || []}
             numMeses={numeroMeses}
+            mesInicial={mesInicial}
+            anoInicial={anoInicial}
             modoVisualizacao={modoVisualizacao}
             onModoVisualizacaoChange={setModoVisualizacao}
           />

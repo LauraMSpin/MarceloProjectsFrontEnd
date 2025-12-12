@@ -41,7 +41,7 @@ export default function CurvaSChart({
     );
   }
 
-  const dadosOriginais = calcularCurvaS(servicos, numMeses, pagamentosMensais);
+  const dadosOriginais = calcularCurvaS(servicos, numMeses, pagamentosMensais, mesInicial, anoInicial);
   
   // Calcular o mês de referência atual (quantos meses se passaram desde o início)
   const agora = new Date();

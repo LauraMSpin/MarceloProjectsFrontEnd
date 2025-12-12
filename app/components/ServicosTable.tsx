@@ -3,6 +3,7 @@
 import React from 'react';
 import { Servico, PagamentoMensal } from '../types';
 import { useState } from 'react';
+import { gerarMesesSequenciais } from '../utils/datas';
 
 interface ServicosTableProps {
   servicos: Servico[];
@@ -12,6 +13,8 @@ interface ServicosTableProps {
   onUpdatePagamento: (ordem: number, mes: string, valor: number) => void;
   pagamentosMensais: PagamentoMensal[];
   numMeses?: number;
+  mesInicial?: number;
+  anoInicial?: number;
   modoVisualizacao: 'percentual' | 'real';
   onModoVisualizacaoChange: (modo: 'percentual' | 'real') => void;
 }
@@ -24,6 +27,8 @@ export default function ServicosTable({
   onUpdatePagamento,
   pagamentosMensais,
   numMeses = 12,
+  mesInicial = 1,
+  anoInicial = new Date().getFullYear(),
   modoVisualizacao,
   onModoVisualizacaoChange,
 }: ServicosTableProps) {
@@ -34,6 +39,9 @@ export default function ServicosTable({
   } | null>(null);
   const [editandoPagamento, setEditandoPagamento] = useState<number | null>(null);
   const [valorTemp, setValorTemp] = useState<string>('');
+  
+  // Gerar nomes dos meses reais
+  const nomesMeses = gerarMesesSequenciais(mesInicial, anoInicial, numMeses);
 
   const handleIniciarEdicao = (
     servicoIndex: number,
@@ -191,12 +199,12 @@ export default function ServicosTable({
               </th>
               <th className="px-2 py-3 text-xs font-bold text-center border border-purple-500"></th>
               
-              {Array.from({ length: numMeses }, (_, i) => (
+              {nomesMeses.map((nomeMes, i) => (
                 <th
                   key={i}
                   className="px-4 py-3 text-xs font-bold text-center border border-purple-500"
                 >
-                  Mês {i + 1}
+                  {nomeMes}
                 </th>
               ))}
               
