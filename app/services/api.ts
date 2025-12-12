@@ -1,6 +1,18 @@
-import { Usuario, Contrato, Servico, Medicao } from '../types';
+import { Usuario, Contrato, Servico, Medicao, ContratoCompartilhado } from '../types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+
+// Função para obter headers com token de autenticação
+function getAuthHeaders(): HeadersInit {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('auth_token') : null;
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json'
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
 
 // Tipos para DTOs do backend
 interface UsuarioDto {
@@ -38,6 +50,9 @@ interface ContratoDto {
   anoInicial: number;
   dataCriacao: string;
   usuarioId: string;
+  nomeProprietario?: string;
+  isProprietario: boolean;
+  podeEditar: boolean;
   servicos: ServicoDto[];
 }
 
@@ -50,6 +65,9 @@ interface ContratoResumoDto {
   anoInicial: number;
   dataCriacao: string;
   usuarioId: string;
+  nomeProprietario?: string;
+  isProprietario: boolean;
+  podeEditar: boolean;
 }
 
 // Conversores DTO -> Frontend
@@ -92,6 +110,9 @@ function convertContratoFromDto(dto: ContratoDto): Contrato {
     anoInicial: dto.anoInicial,
     dataCriacao: dto.dataCriacao,
     usuarioId: dto.usuarioId,
+    nomeProprietario: dto.nomeProprietario,
+    isProprietario: dto.isProprietario,
+    podeEditar: dto.podeEditar,
     servicos: dto.servicos.map(convertServicoFromDto),
   };
 }
@@ -106,6 +127,9 @@ function convertContratoResumoFromDto(dto: ContratoResumoDto): Contrato {
     anoInicial: dto.anoInicial,
     dataCriacao: dto.dataCriacao,
     usuarioId: dto.usuarioId,
+    nomeProprietario: dto.nomeProprietario,
+    isProprietario: dto.isProprietario,
+    podeEditar: dto.podeEditar,
     servicos: [],
   };
 }
@@ -113,14 +137,18 @@ function convertContratoResumoFromDto(dto: ContratoResumoDto): Contrato {
 // API de Usuários
 export const usuariosApi = {
   async listar(): Promise<Usuario[]> {
-    const response = await fetch(`${API_BASE_URL}/usuarios`);
+    const response = await fetch(`${API_BASE_URL}/usuarios`, {
+      headers: getAuthHeaders(),
+    });
     if (!response.ok) throw new Error('Erro ao listar usuários');
     const data: UsuarioDto[] = await response.json();
     return data.map(convertUsuarioFromDto);
   },
 
   async buscar(id: string): Promise<Usuario> {
-    const response = await fetch(`${API_BASE_URL}/usuarios/${id}`);
+    const response = await fetch(`${API_BASE_URL}/usuarios/${id}`, {
+      headers: getAuthHeaders(),
+    });
     if (!response.ok) throw new Error('Usuário não encontrado');
     const data: UsuarioDto = await response.json();
     return convertUsuarioFromDto(data);
@@ -129,7 +157,7 @@ export const usuariosApi = {
   async criar(usuario: { nome: string; email: string; empresa?: string }): Promise<Usuario> {
     const response = await fetch(`${API_BASE_URL}/usuarios`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(usuario),
     });
     if (!response.ok) throw new Error('Erro ao criar usuário');
@@ -140,7 +168,7 @@ export const usuariosApi = {
   async atualizar(id: string, usuario: { nome: string; email: string; empresa?: string }): Promise<void> {
     const response = await fetch(`${API_BASE_URL}/usuarios/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(usuario),
     });
     if (!response.ok) throw new Error('Erro ao atualizar usuário');
@@ -149,6 +177,7 @@ export const usuariosApi = {
   async deletar(id: string): Promise<void> {
     const response = await fetch(`${API_BASE_URL}/usuarios/${id}`, {
       method: 'DELETE',
+      headers: getAuthHeaders(),
     });
     if (!response.ok) throw new Error('Erro ao deletar usuário');
   },
@@ -156,18 +185,19 @@ export const usuariosApi = {
 
 // API de Contratos
 export const contratosApi = {
-  async listar(usuarioId?: string): Promise<Contrato[]> {
-    const url = usuarioId 
-      ? `${API_BASE_URL}/contratos?usuarioId=${usuarioId}`
-      : `${API_BASE_URL}/contratos`;
-    const response = await fetch(url);
+  async listar(): Promise<Contrato[]> {
+    const response = await fetch(`${API_BASE_URL}/contratos`, {
+      headers: getAuthHeaders(),
+    });
     if (!response.ok) throw new Error('Erro ao listar contratos');
     const data: ContratoResumoDto[] = await response.json();
     return data.map(convertContratoResumoFromDto);
   },
 
   async buscar(id: string): Promise<Contrato> {
-    const response = await fetch(`${API_BASE_URL}/contratos/${id}`);
+    const response = await fetch(`${API_BASE_URL}/contratos/${id}`, {
+      headers: getAuthHeaders(),
+    });
     if (!response.ok) throw new Error('Contrato não encontrado');
     const data: ContratoDto = await response.json();
     return convertContratoFromDto(data);
@@ -179,11 +209,10 @@ export const contratosApi = {
     numeroMeses: number;
     mesInicial: number;
     anoInicial: number;
-    usuarioId: string;
   }): Promise<Contrato> {
     const response = await fetch(`${API_BASE_URL}/contratos`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(contrato),
     });
     if (!response.ok) throw new Error('Erro ao criar contrato');
@@ -200,7 +229,7 @@ export const contratosApi = {
   }): Promise<void> {
     const response = await fetch(`${API_BASE_URL}/contratos/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(contrato),
     });
     if (!response.ok) throw new Error('Erro ao atualizar contrato');
@@ -209,8 +238,37 @@ export const contratosApi = {
   async deletar(id: string): Promise<void> {
     const response = await fetch(`${API_BASE_URL}/contratos/${id}`, {
       method: 'DELETE',
+      headers: getAuthHeaders(),
     });
     if (!response.ok) throw new Error('Erro ao deletar contrato');
+  },
+
+  async listarCompartilhamentos(contratoId: string): Promise<ContratoCompartilhado[]> {
+    const response = await fetch(`${API_BASE_URL}/contratos/${contratoId}/compartilhamentos`, {
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) throw new Error('Erro ao listar compartilhamentos');
+    return response.json();
+  },
+
+  async compartilhar(contratoId: string, usuarioId: string, podeEditar: boolean): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/contratos/${contratoId}/compartilhar`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ usuarioId, podeEditar }),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Erro ao compartilhar contrato');
+    }
+  },
+
+  async removerCompartilhamento(contratoId: string, usuarioId: string): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/contratos/${contratoId}/compartilhar/${usuarioId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) throw new Error('Erro ao remover compartilhamento');
   },
 };
 
@@ -220,14 +278,18 @@ export const servicosApi = {
     const url = contratoId 
       ? `${API_BASE_URL}/servicos?contratoId=${contratoId}`
       : `${API_BASE_URL}/servicos`;
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: getAuthHeaders(),
+    });
     if (!response.ok) throw new Error('Erro ao listar serviços');
     const data: ServicoDto[] = await response.json();
     return data.map(convertServicoFromDto);
   },
 
   async buscar(id: string): Promise<Servico> {
-    const response = await fetch(`${API_BASE_URL}/servicos/${id}`);
+    const response = await fetch(`${API_BASE_URL}/servicos/${id}`, {
+      headers: getAuthHeaders(),
+    });
     if (!response.ok) throw new Error('Serviço não encontrado');
     const data: ServicoDto = await response.json();
     return convertServicoFromDto(data);
@@ -246,7 +308,7 @@ export const servicosApi = {
     };
     const response = await fetch(`${API_BASE_URL}/servicos`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(servicoComOrdem),
     });
     if (!response.ok) throw new Error('Erro ao criar serviço');
@@ -266,7 +328,7 @@ export const servicosApi = {
     };
     const response = await fetch(`${API_BASE_URL}/servicos/${id}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(servicoComOrdem),
     });
     if (!response.ok) throw new Error('Erro ao atualizar serviço');
@@ -282,7 +344,7 @@ export const servicosApi = {
     const medicaoComOrdem = { ...medicao, ordem: medicaoIndex };
     const response = await fetch(`${API_BASE_URL}/servicos/${servicoId}/medicoes/${medicaoIndex}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
       body: JSON.stringify(medicaoComOrdem),
     });
     if (!response.ok) throw new Error('Erro ao atualizar medição');
@@ -291,6 +353,7 @@ export const servicosApi = {
   async deletar(id: string): Promise<void> {
     const response = await fetch(`${API_BASE_URL}/servicos/${id}`, {
       method: 'DELETE',
+      headers: getAuthHeaders(),
     });
     if (!response.ok) throw new Error('Erro ao deletar serviço');
   },

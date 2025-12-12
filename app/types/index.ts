@@ -52,4 +52,16 @@ export interface Contrato {
   servicos: Servico[];
   dataCriacao: string;
   usuarioId: string;
+  nomeProprietario?: string;
+  isProprietario: boolean;
+  podeEditar: boolean;
+}
+
+export interface ContratoCompartilhado {
+  id: string;
+  usuarioId: string;
+  nomeUsuario: string;
+  emailUsuario: string;
+  podeEditar: boolean;
+  dataCompartilhamento: string;
 }

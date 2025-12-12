@@ -7,6 +7,7 @@ import Totais from './components/Totais';
 import CurvaSChart from './components/CurvaSChart';
 import ModalContrato from './components/ModalContrato';
 import ModalUsuario from './components/ModalUsuario';
+import ModalCompartilhar from './components/ModalCompartilhar';
 import Spinner from './components/Spinner';
 import LoginForm from './components/LoginForm';
 import GerenciamentoUsuarios from './components/GerenciamentoUsuarios';
@@ -25,6 +26,7 @@ export default function Home() {
   const [editandoIndex, setEditandoIndex] = useState<number | null>(null);
   const [mostrarModalContrato, setMostrarModalContrato] = useState(false);
   const [mostrarModalUsuario, setMostrarModalUsuario] = useState(false);
+  const [mostrarModalCompartilhar, setMostrarModalCompartilhar] = useState(false);
   const [contratoEditando, setContratoEditando] = useState<Contrato | null>(null);
   const [modoVisualizacao, setModoVisualizacao] = useState<'percentual' | 'real'>('percentual');
   const [loading, setLoading] = useState(true);
@@ -63,14 +65,14 @@ export default function Home() {
   // Carregar contratos do usuário atual
   useEffect(() => {
     const carregarContratos = async () => {
-      if (!usuarioAtualId || !usuarioLogado) {
+      if (!usuarioLogado) {
         setContratos([]);
         setContratoAtualId(null);
         return;
       }
 
       try {
-        const contratosCarregados = await contratosApi.listar(usuarioAtualId);
+        const contratosCarregados = await contratosApi.listar();
         setContratos(contratosCarregados);
         
         if (contratosCarregados.length > 0 && !contratoAtualId) {
@@ -82,7 +84,7 @@ export default function Home() {
     };
 
     carregarContratos();
-  }, [usuarioAtualId, usuarioLogado]);
+  }, [usuarioLogado]);
 
   // Carregar contrato completo (com serviços) quando selecionado
   useEffect(() => {
@@ -105,7 +107,8 @@ export default function Home() {
   }, [contratoAtualId]);
 
   const usuarioAtual = usuarios.find(u => u.id === usuarioAtualId);
-  const contratosDoUsuario = contratos.filter(c => c.usuarioId === usuarioAtualId);
+  // Todos os contratos já vêm filtrados pelo backend (próprios + compartilhados)
+  const contratosDoUsuario = contratos;
   const servicos = contratoAtual?.servicos || [];
   const numeroMeses = contratoAtual?.numeroMeses || 12;
   const mesInicial = contratoAtual?.mesInicial || new Date().getMonth() + 1;
@@ -285,7 +288,7 @@ export default function Home() {
         setContratoEditando(null);
         
         // Recarregar contratos
-        const contratosAtualizados = await contratosApi.listar(usuarioAtualId);
+        const contratosAtualizados = await contratosApi.listar();
         setContratos(contratosAtualizados);
         await recarregarContrato();
       } else {
@@ -296,7 +299,6 @@ export default function Home() {
           numeroMeses,
           mesInicial,
           anoInicial,
-          usuarioId: usuarioAtualId,
         });
         
         setContratos([...contratos, novoContrato]);
@@ -374,7 +376,7 @@ export default function Home() {
 
   const handleImportarJSON = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file && usuarioAtualId) {
+    if (file && usuarioLogado) {
       const reader = new FileReader();
       reader.onload = async (e) => {
         try {
@@ -387,7 +389,6 @@ export default function Home() {
             numeroMeses: contratoImportado.numeroMeses,
             mesInicial: contratoImportado.mesInicial,
             anoInicial: contratoImportado.anoInicial,
-            usuarioId: usuarioAtualId,
           });
           
           // Criar serviços do contrato importado
@@ -403,7 +404,7 @@ export default function Home() {
           }
           
           // Recarregar lista de contratos
-          const contratosAtualizados = await contratosApi.listar(usuarioAtualId);
+          const contratosAtualizados = await contratosApi.listar();
           setContratos(contratosAtualizados);
           setContratoAtualId(novoContrato.id);
         } catch (error) {
@@ -518,7 +519,7 @@ export default function Home() {
                 >
                   {contratosDoUsuario.map(contrato => (
                     <option key={contrato.id} value={contrato.id}>
-                      {contrato.nome}
+                      {contrato.nome} {!contrato.isProprietario ? `(de ${contrato.nomeProprietario})` : ''}
                     </option>
                   ))}
                 </select>
@@ -543,16 +544,28 @@ export default function Home() {
                       onClick={handleEditarContrato}
                       className="bg-yellow-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-yellow-700 transition text-sm sm:text-base"
                       title="Editar contrato"
+                      disabled={!contratoAtual?.podeEditar}
                     >
                       ✏️ <span className="hidden sm:inline">Editar</span>
                     </button>
-                    <button
-                      onClick={() => handleDeletarContrato(contratoAtualId)}
-                      className="bg-red-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-red-700 transition text-sm sm:text-base"
-                      title="Excluir contrato"
-                    >
-                      🗑️ <span className="hidden sm:inline">Excluir</span>
-                    </button>
+                    {contratoAtual?.isProprietario && (
+                      <>
+                        <button
+                          onClick={() => setMostrarModalCompartilhar(true)}
+                          className="bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-green-700 transition text-sm sm:text-base"
+                          title="Compartilhar contrato"
+                        >
+                          🔗 <span className="hidden sm:inline">Compartilhar</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeletarContrato(contratoAtualId)}
+                          className="bg-red-600 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-red-700 transition text-sm sm:text-base"
+                          title="Excluir contrato"
+                        >
+                          🗑️ <span className="hidden sm:inline">Excluir</span>
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
               </div>
@@ -582,6 +595,14 @@ export default function Home() {
           {contratoAtual && (
             <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-200">
               <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-4 items-start sm:items-center text-xs sm:text-sm">
+                {!contratoAtual.isProprietario && (
+                  <div className="w-full mb-2">
+                    <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-medium">
+                      🔗 Compartilhado por: {contratoAtual.nomeProprietario}
+                      {contratoAtual.podeEditar ? ' (pode editar)' : ' (somente visualização)'}
+                    </span>
+                  </div>
+                )}
                 <div>
                   <span className="font-semibold text-gray-700">Período:</span>
                   <span className="ml-2 text-gray-600">
@@ -620,6 +641,19 @@ export default function Home() {
             onFechar={() => setMostrarModalUsuario(false)}
             usuarios={usuarios}
             onSelecionarUsuario={handleSelecionarUsuario}
+          />
+        )}
+
+        {mostrarModalCompartilhar && contratoAtual && usuarioLogado && (
+          <ModalCompartilhar
+            contrato={contratoAtual}
+            usuarioLogadoId={usuarioLogado.id}
+            onFechar={() => setMostrarModalCompartilhar(false)}
+            onAtualizar={async () => {
+              // Recarregar lista de contratos
+              const contratosAtualizados = await contratosApi.listar();
+              setContratos(contratosAtualizados);
+            }}
           />
         )}
 
