@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Contrato } from '../types';
 
 interface ModalContratoProps {
-  onCriar: (nome: string, descricao: string, numeroMeses: number, mesInicial: number, anoInicial: number) => void;
+  onCriar: (nome: string, descricao: string, numeroMeses: number, mesInicial: number, anoInicial: number, percentualReajuste: number, mesInicioReajuste: number | null) => void;
   onFechar: () => void;
   contratoEditando?: Contrato | null;
 }
@@ -15,6 +15,9 @@ export default function ModalContrato({ onCriar, onFechar, contratoEditando }: M
   const [numeroMeses, setNumeroMeses] = useState(12);
   const [mesInicial, setMesInicial] = useState(new Date().getMonth() + 1);
   const [anoInicial, setAnoInicial] = useState(new Date().getFullYear());
+  const [percentualReajuste, setPercentualReajuste] = useState(0);
+  const [mesInicioReajuste, setMesInicioReajuste] = useState<number | null>(null);
+  const [habilitarReajuste, setHabilitarReajuste] = useState(false);
 
   useEffect(() => {
     if (contratoEditando) {
@@ -23,6 +26,9 @@ export default function ModalContrato({ onCriar, onFechar, contratoEditando }: M
       setNumeroMeses(contratoEditando.numeroMeses);
       setMesInicial(contratoEditando.mesInicial);
       setAnoInicial(contratoEditando.anoInicial);
+      setPercentualReajuste(contratoEditando.percentualReajuste || 0);
+      setMesInicioReajuste(contratoEditando.mesInicioReajuste);
+      setHabilitarReajuste(contratoEditando.percentualReajuste > 0 || contratoEditando.mesInicioReajuste !== null);
     }
   }, [contratoEditando]);
 
@@ -32,7 +38,15 @@ export default function ModalContrato({ onCriar, onFechar, contratoEditando }: M
       alert('Por favor, informe o nome do contrato');
       return;
     }
-    onCriar(nome, descricao, numeroMeses, mesInicial, anoInicial);
+    onCriar(
+      nome, 
+      descricao, 
+      numeroMeses, 
+      mesInicial, 
+      anoInicial,
+      habilitarReajuste ? percentualReajuste : 0,
+      habilitarReajuste ? mesInicioReajuste : null
+    );
   };
 
   return (
@@ -119,12 +133,70 @@ export default function ModalContrato({ onCriar, onFechar, contratoEditando }: M
                 <input
                   type="number"
                   min="1"
-                  max="36"
+                  max="60"
                   value={numeroMeses}
                   onChange={(e) => setNumeroMeses(parseInt(e.target.value) || 12)}
                   className="w-full px-2 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-purple-500 focus:outline-none text-xs sm:text-base"
                 />
               </div>
+            </div>
+
+            {/* Seção de Reajuste */}
+            <div className="border-t border-gray-200 pt-4 mt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <input
+                  type="checkbox"
+                  id="habilitarReajuste"
+                  checked={habilitarReajuste}
+                  onChange={(e) => setHabilitarReajuste(e.target.checked)}
+                  className="w-4 h-4 text-purple-600 rounded focus:ring-purple-500"
+                />
+                <label htmlFor="habilitarReajuste" className="text-sm font-semibold text-gray-700">
+                  📈 Aplicar reajuste (inflação, correção, etc.)
+                </label>
+              </div>
+
+              {habilitarReajuste && (
+                <div className="grid grid-cols-2 gap-4 bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                  <div>
+                    <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2">
+                      Percentual de Reajuste (%)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      value={percentualReajuste || ''}
+                      onChange={(e) => setPercentualReajuste(parseFloat(e.target.value) || 0)}
+                      className="w-full px-3 py-2 border-2 border-yellow-300 bg-white rounded-lg focus:border-yellow-500 focus:outline-none text-sm"
+                      placeholder="Ex: 5.5"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2">
+                      Aplicar a partir do mês
+                    </label>
+                    <select
+                      value={mesInicioReajuste || ''}
+                      onChange={(e) => setMesInicioReajuste(e.target.value ? parseInt(e.target.value) : null)}
+                      className="w-full px-3 py-2 border-2 border-yellow-300 bg-white rounded-lg focus:border-yellow-500 focus:outline-none text-sm"
+                    >
+                      <option value="">Selecione...</option>
+                      {Array.from({ length: numeroMeses }, (_, i) => (
+                        <option key={i + 1} value={i + 1}>
+                          Mês {i + 1}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="col-span-2 text-xs text-gray-600 mt-1">
+                    💡 O reajuste será aplicado aos valores previstos a partir do mês selecionado.
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

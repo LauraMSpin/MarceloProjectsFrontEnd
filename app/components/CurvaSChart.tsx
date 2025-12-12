@@ -1,6 +1,6 @@
 'use client';
 
-import { Servico } from '../types';
+import { Servico, PagamentoMensal } from '../types';
 import { calcularCurvaS } from '../utils/curvaS';
 import {
   LineChart,
@@ -17,9 +17,19 @@ interface CurvaSChartProps {
   servicos: Servico[];
   numMeses?: number;
   modoVisualizacao: 'percentual' | 'real';
+  pagamentosMensais?: PagamentoMensal[];
+  mesInicial?: number;
+  anoInicial?: number;
 }
 
-export default function CurvaSChart({ servicos, numMeses = 12, modoVisualizacao }: CurvaSChartProps) {
+export default function CurvaSChart({ 
+  servicos, 
+  numMeses = 12, 
+  modoVisualizacao, 
+  pagamentosMensais = [],
+  mesInicial = 1,
+  anoInicial = new Date().getFullYear()
+}: CurvaSChartProps) {
   if (servicos.length === 0) {
     return (
       <div className="bg-white p-6 sm:p-12 rounded-xl shadow-lg text-center">
@@ -31,23 +41,70 @@ export default function CurvaSChart({ servicos, numMeses = 12, modoVisualizacao 
     );
   }
 
-  const dadosOriginais = calcularCurvaS(servicos, numMeses);
+  const dadosOriginais = calcularCurvaS(servicos, numMeses, pagamentosMensais);
+  
+  // Calcular o mês de referência atual (quantos meses se passaram desde o início)
+  const agora = new Date();
+  const mesAtual = agora.getMonth() + 1; // 1-12
+  const anoAtual = agora.getFullYear();
+  
+  // Calcular quantos meses se passaram desde o início do contrato
+  const mesesDesdeInicio = (anoAtual - anoInicial) * 12 + (mesAtual - mesInicial) + 1;
+  const mesReferenciaAtual = Math.max(1, Math.min(mesesDesdeInicio, numMeses));
+  
+  // Encontrar o último mês com realizado preenchido (para quebrar a regra se houver dados futuros)
+  let ultimoMesComRealizado = 0;
+  dadosOriginais.forEach((dado, index) => {
+    if (dado.realizado > 0) {
+      ultimoMesComRealizado = index + 1;
+    }
+  });
+  
+  // O limite é o maior entre: mês de referência atual OU último mês com realizado
+  const limiteExibicao = Math.max(mesReferenciaAtual, ultimoMesComRealizado);
   
   // Calcular valor total previsto para percentuais
   const valorTotalPrevisto = dadosOriginais.length > 0 
     ? dadosOriginais[dadosOriginais.length - 1].previstoAcumulado 
     : 0;
 
-  // Transformar dados para modo percentual
-  const dados = dadosOriginais.map(dado => ({
-    ...dado,
-    previstoPercentual: valorTotalPrevisto > 0 ? (dado.previsto / valorTotalPrevisto) * 100 : 0,
-    realizadoPercentual: valorTotalPrevisto > 0 ? (dado.realizado / valorTotalPrevisto) * 100 : 0,
-    pagoPercentual: valorTotalPrevisto > 0 ? (dado.pago / valorTotalPrevisto) * 100 : 0,
-    previstoAcumuladoPercentual: valorTotalPrevisto > 0 ? (dado.previstoAcumulado / valorTotalPrevisto) * 100 : 0,
-    realizadoAcumuladoPercentual: valorTotalPrevisto > 0 ? (dado.realizadoAcumulado / valorTotalPrevisto) * 100 : 0,
-    pagoAcumuladoPercentual: valorTotalPrevisto > 0 ? (dado.pagoAcumulado / valorTotalPrevisto) * 100 : 0,
-  }));
+  // Transformar dados para modo percentual e aplicar limite de exibição para realizado/pago
+  const dados = dadosOriginais.map((dado, index) => {
+    const mesNumero = index + 1;
+    const dentroDoLimite = mesNumero <= limiteExibicao;
+    
+    return {
+      ...dado,
+      // Realizado e pago são zerados após o limite
+      realizado: dentroDoLimite ? dado.realizado : 0,
+      pago: dentroDoLimite ? dado.pago : 0,
+      realizadoAcumulado: dentroDoLimite ? dado.realizadoAcumulado : (index > 0 ? dadosOriginais[limiteExibicao - 1]?.realizadoAcumulado || 0 : 0),
+      pagoAcumulado: dentroDoLimite ? dado.pagoAcumulado : (index > 0 ? dadosOriginais[limiteExibicao - 1]?.pagoAcumulado || 0 : 0),
+      previstoPercentual: valorTotalPrevisto > 0 ? (dado.previsto / valorTotalPrevisto) * 100 : 0,
+      realizadoPercentual: valorTotalPrevisto > 0 ? ((dentroDoLimite ? dado.realizado : 0) / valorTotalPrevisto) * 100 : 0,
+      pagoPercentual: valorTotalPrevisto > 0 ? ((dentroDoLimite ? dado.pago : 0) / valorTotalPrevisto) * 100 : 0,
+      previstoAcumuladoPercentual: valorTotalPrevisto > 0 ? (dado.previstoAcumulado / valorTotalPrevisto) * 100 : 0,
+      realizadoAcumuladoPercentual: valorTotalPrevisto > 0 ? ((dentroDoLimite ? dado.realizadoAcumulado : (dadosOriginais[limiteExibicao - 1]?.realizadoAcumulado || 0)) / valorTotalPrevisto) * 100 : 0,
+      pagoAcumuladoPercentual: valorTotalPrevisto > 0 ? ((dentroDoLimite ? dado.pagoAcumulado : (dadosOriginais[limiteExibicao - 1]?.pagoAcumulado || 0)) / valorTotalPrevisto) * 100 : 0,
+      // Flag para indicar se está além do limite (para ocultar na linha do gráfico)
+      aposLimite: !dentroDoLimite,
+    };
+  });
+
+  // Para o gráfico, criar dados que param no limite (linha não continua após o mês de referência)
+  const dadosGrafico = dados.map((dado, index) => {
+    const mesNumero = index + 1;
+    if (mesNumero > limiteExibicao) {
+      return {
+        ...dado,
+        realizadoAcumulado: null,
+        pagoAcumulado: null,
+        realizadoAcumuladoPercentual: null,
+        pagoAcumuladoPercentual: null,
+      };
+    }
+    return dado;
+  });
 
   const formatarValor = (valor: number) => {
     return `R$ ${valor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -81,7 +138,7 @@ export default function CurvaSChart({ servicos, numMeses = 12, modoVisualizacao 
       
       <ResponsiveContainer width="100%" height={300} className="sm:hidden">
         <LineChart
-          data={dados}
+          data={dadosGrafico}
           margin={{
             top: 5,
             right: 10,
@@ -136,6 +193,7 @@ export default function CurvaSChart({ servicos, numMeses = 12, modoVisualizacao 
             name="✅ Realizado"
             dot={{ r: 3, fill: '#10b981' }}
             activeDot={{ r: 5 }}
+            connectNulls={false}
           />
           <Line
             type="monotone"
@@ -145,13 +203,14 @@ export default function CurvaSChart({ servicos, numMeses = 12, modoVisualizacao 
             name="💰 Pago"
             dot={{ r: 3, fill: '#f97316' }}
             activeDot={{ r: 5 }}
+            connectNulls={false}
           />
         </LineChart>
       </ResponsiveContainer>
 
       <ResponsiveContainer width="100%" height={500} className="hidden sm:block">
         <LineChart
-          data={dados}
+          data={dadosGrafico}
           margin={{
             top: 5,
             right: 30,
@@ -201,6 +260,7 @@ export default function CurvaSChart({ servicos, numMeses = 12, modoVisualizacao 
             name="✅ Realizado Acumulado"
             dot={{ r: 5, fill: '#10b981' }}
             activeDot={{ r: 8 }}
+            connectNulls={false}
           />
           <Line
             type="monotone"
@@ -210,6 +270,7 @@ export default function CurvaSChart({ servicos, numMeses = 12, modoVisualizacao 
             name="💰 Pago Acumulado"
             dot={{ r: 5, fill: '#f97316' }}
             activeDot={{ r: 8 }}
+            connectNulls={false}
           />
         </LineChart>
       </ResponsiveContainer>

@@ -1,4 +1,4 @@
-import { Usuario, Contrato, Servico, Medicao, ContratoCompartilhado } from '../types';
+import { Usuario, Contrato, Servico, Medicao, ContratoCompartilhado, PagamentoMensal } from '../types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
 
@@ -29,7 +29,13 @@ interface MedicaoDto {
   mes: string;
   previsto: number;
   realizado: number;
-  pago: number;
+}
+
+interface PagamentoMensalDto {
+  id: string;
+  ordem: number;
+  mes: string;
+  valor: number;
 }
 
 interface ServicoDto {
@@ -53,7 +59,10 @@ interface ContratoDto {
   nomeProprietario?: string;
   isProprietario: boolean;
   podeEditar: boolean;
+  percentualReajuste: number;
+  mesInicioReajuste: number | null;
   servicos: ServicoDto[];
+  pagamentosMensais: PagamentoMensalDto[];
 }
 
 interface ContratoResumoDto {
@@ -68,6 +77,8 @@ interface ContratoResumoDto {
   nomeProprietario?: string;
   isProprietario: boolean;
   podeEditar: boolean;
+  percentualReajuste: number;
+  mesInicioReajuste: number | null;
 }
 
 // Conversores DTO -> Frontend
@@ -86,7 +97,15 @@ function convertMedicaoFromDto(dto: MedicaoDto): Medicao {
     mes: dto.mes,
     previsto: dto.previsto,
     realizado: dto.realizado,
-    pago: dto.pago,
+  };
+}
+
+function convertPagamentoMensalFromDto(dto: PagamentoMensalDto): PagamentoMensal {
+  return {
+    id: dto.id,
+    ordem: dto.ordem,
+    mes: dto.mes,
+    valor: dto.valor,
   };
 }
 
@@ -113,7 +132,10 @@ function convertContratoFromDto(dto: ContratoDto): Contrato {
     nomeProprietario: dto.nomeProprietario,
     isProprietario: dto.isProprietario,
     podeEditar: dto.podeEditar,
+    percentualReajuste: dto.percentualReajuste,
+    mesInicioReajuste: dto.mesInicioReajuste,
     servicos: dto.servicos.map(convertServicoFromDto),
+    pagamentosMensais: dto.pagamentosMensais?.map(convertPagamentoMensalFromDto) || [],
   };
 }
 
@@ -130,7 +152,10 @@ function convertContratoResumoFromDto(dto: ContratoResumoDto): Contrato {
     nomeProprietario: dto.nomeProprietario,
     isProprietario: dto.isProprietario,
     podeEditar: dto.podeEditar,
+    percentualReajuste: dto.percentualReajuste,
+    mesInicioReajuste: dto.mesInicioReajuste,
     servicos: [],
+    pagamentosMensais: [],
   };
 }
 
@@ -209,6 +234,8 @@ export const contratosApi = {
     numeroMeses: number;
     mesInicial: number;
     anoInicial: number;
+    percentualReajuste?: number;
+    mesInicioReajuste?: number | null;
   }): Promise<Contrato> {
     const response = await fetch(`${API_BASE_URL}/contratos`, {
       method: 'POST',
@@ -226,6 +253,8 @@ export const contratosApi = {
     numeroMeses: number;
     mesInicial: number;
     anoInicial: number;
+    percentualReajuste?: number;
+    mesInicioReajuste?: number | null;
   }): Promise<void> {
     const response = await fetch(`${API_BASE_URL}/contratos/${id}`, {
       method: 'PUT',
@@ -270,6 +299,15 @@ export const contratosApi = {
     });
     if (!response.ok) throw new Error('Erro ao remover compartilhamento');
   },
+
+  async atualizarPagamento(contratoId: string, ordem: number, mes: string, valor: number): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/contratos/${contratoId}/pagamentos/${ordem}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ ordem, mes, valor }),
+    });
+    if (!response.ok) throw new Error('Erro ao atualizar pagamento');
+  },
 };
 
 // API de Serviços
@@ -299,7 +337,7 @@ export const servicosApi = {
     item: string;
     servico: string;
     contratoId: string;
-    medicoes: { mes: string; previsto: number; realizado: number; pago: number }[];
+    medicoes: { mes: string; previsto: number; realizado: number }[];
   }): Promise<Servico> {
     // Adicionar ordem às medições
     const servicoComOrdem = {
@@ -319,7 +357,7 @@ export const servicosApi = {
   async atualizar(id: string, servico: {
     item: string;
     servico: string;
-    medicoes: { mes: string; previsto: number; realizado: number; pago: number }[];
+    medicoes: { mes: string; previsto: number; realizado: number }[];
   }): Promise<void> {
     // Adicionar ordem às medições
     const servicoComOrdem = {
@@ -338,7 +376,6 @@ export const servicosApi = {
     mes: string;
     previsto: number;
     realizado: number;
-    pago: number;
   }): Promise<void> {
     // Adicionar ordem à medição
     const medicaoComOrdem = { ...medicao, ordem: medicaoIndex };

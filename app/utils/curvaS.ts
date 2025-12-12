@@ -1,6 +1,6 @@
-import { Servico, CurvaSData } from '../types';
+import { Servico, CurvaSData, PagamentoMensal } from '../types';
 
-export function calcularCurvaS(servicos: Servico[], numMeses: number = 12): CurvaSData[] {
+export function calcularCurvaS(servicos: Servico[], numMeses: number = 12, pagamentosMensais: PagamentoMensal[] = []): CurvaSData[] {
   const dados: CurvaSData[] = [];
   
   // Inicializar arrays para cada mês
@@ -22,9 +22,16 @@ export function calcularCurvaS(servicos: Servico[], numMeses: number = 12): Curv
       if (index < numMeses) {
         dados[index].previsto += medicao.previsto;
         dados[index].realizado += medicao.realizado;
-        dados[index].pago += medicao.pago || 0;
       }
     });
+  });
+
+  // Buscar valores de pagamentos mensais do contrato
+  pagamentosMensais.forEach((pagamento) => {
+    const index = pagamento.ordem - 1; // ordem é 1-based
+    if (index >= 0 && index < numMeses) {
+      dados[index].pago = pagamento.valor;
+    }
   });
 
   // Calcular acumulados
@@ -44,7 +51,7 @@ export function calcularCurvaS(servicos: Servico[], numMeses: number = 12): Curv
   return dados;
 }
 
-export function calcularTotais(servicos: Servico[]) {
+export function calcularTotais(servicos: Servico[], pagamentosMensais: PagamentoMensal[] = []) {
   let totalPrevisto = 0;
   let totalRealizado = 0;
   let totalPago = 0;
@@ -56,8 +63,12 @@ export function calcularTotais(servicos: Servico[]) {
     servico.medicoes.forEach((medicao) => {
       totalPrevisto += medicao.previsto;
       totalRealizado += medicao.realizado;
-      totalPago += medicao.pago || 0;
     });
+  });
+
+  // Calcular total pago a partir dos pagamentos mensais do contrato
+  pagamentosMensais.forEach((pagamento) => {
+    totalPago += pagamento.valor;
   });
 
   return {

@@ -2,7 +2,13 @@ export interface Medicao {
   mes: string; // ex: "Jan/2024", "Fev/2024", etc
   previsto: number;
   realizado: number;
-  pago: number;
+}
+
+export interface PagamentoMensal {
+  id?: string;
+  ordem: number;
+  mes: string;
+  valor: number;
 }
 
 export interface Servico {
@@ -50,11 +56,14 @@ export interface Contrato {
   mesInicial: number;
   anoInicial: number;
   servicos: Servico[];
+  pagamentosMensais: PagamentoMensal[];
   dataCriacao: string;
   usuarioId: string;
   nomeProprietario?: string;
   isProprietario: boolean;
   podeEditar: boolean;
+  percentualReajuste: number;
+  mesInicioReajuste: number | null;
 }
 
 export interface ContratoCompartilhado {

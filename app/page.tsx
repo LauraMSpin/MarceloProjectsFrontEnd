@@ -139,7 +139,6 @@ export default function Home() {
             mes: `Mês ${medicoesAtuais + i + 1}`,
             previsto: 0,
             realizado: 0,
-            pago: 0,
           });
         }
       } else if (medicoesAtuais > novoNumeroMeses) {
@@ -248,7 +247,7 @@ export default function Home() {
     }
   };
 
-  const handleUpdateMedicao = async (servicoIndex: number, medicaoIndex: number, field: 'previsto' | 'realizado' | 'pago', valor: number) => {
+  const handleUpdateMedicao = async (servicoIndex: number, medicaoIndex: number, field: 'previsto' | 'realizado', valor: number) => {
     const servico = servicos[servicoIndex];
     const medicao = servico.medicoes[medicaoIndex];
     
@@ -268,7 +267,21 @@ export default function Home() {
     }
   };
 
-  const handleCriarContrato = async (nome: string, descricao: string, numeroMeses: number, mesInicial: number, anoInicial: number) => {
+  const handleUpdatePagamento = async (ordem: number, mes: string, valor: number) => {
+    if (!contratoAtualId) return;
+    
+    setSalvando(true);
+    try {
+      await contratosApi.atualizarPagamento(contratoAtualId, ordem, mes, valor);
+      await recarregarContrato();
+    } catch (err) {
+      console.error('Erro ao atualizar pagamento:', err);
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const handleCriarContrato = async (nome: string, descricao: string, numeroMeses: number, mesInicial: number, anoInicial: number, percentualReajuste: number = 0, mesInicioReajuste: number | null = null) => {
     if (!usuarioAtualId) {
       alert('Selecione um usuário primeiro!');
       return;
@@ -284,6 +297,8 @@ export default function Home() {
           numeroMeses,
           mesInicial,
           anoInicial,
+          percentualReajuste,
+          mesInicioReajuste,
         });
         setContratoEditando(null);
         
@@ -299,6 +314,8 @@ export default function Home() {
           numeroMeses,
           mesInicial,
           anoInicial,
+          percentualReajuste,
+          mesInicioReajuste,
         });
         
         setContratos([...contratos, novoContrato]);
@@ -613,6 +630,13 @@ export default function Home() {
                   <span className="font-semibold text-gray-700">Duração:</span>
                   <span className="ml-2 text-gray-600">{contratoAtual.numeroMeses} meses</span>
                 </div>
+                {contratoAtual.percentualReajuste > 0 && contratoAtual.mesInicioReajuste && (
+                  <div>
+                    <span className="bg-yellow-100 text-yellow-700 px-2 py-1 rounded text-xs font-medium">
+                      📈 Reajuste: {contratoAtual.percentualReajuste}% a partir do mês {contratoAtual.mesInicioReajuste}
+                    </span>
+                  </div>
+                )}
                 {contratoAtual.descricao && (
                   <div className="w-full sm:w-auto sm:flex-1">
                     <span className="font-semibold text-gray-700">Descrição:</span>
@@ -695,6 +719,8 @@ export default function Home() {
             onEdit={handleEdit}
             onDelete={handleDelete}
             onUpdateMedicao={handleUpdateMedicao}
+            onUpdatePagamento={handleUpdatePagamento}
+            pagamentosMensais={contratoAtual?.pagamentosMensais || []}
             numMeses={numeroMeses}
             modoVisualizacao={modoVisualizacao}
             onModoVisualizacaoChange={setModoVisualizacao}
@@ -703,7 +729,14 @@ export default function Home() {
 
         {/* Curva S */}
         <div className="mt-6 sm:mt-8">
-          <CurvaSChart servicos={servicos} numMeses={numeroMeses} modoVisualizacao={modoVisualizacao} />
+          <CurvaSChart 
+            servicos={servicos} 
+            numMeses={numeroMeses} 
+            modoVisualizacao={modoVisualizacao} 
+            pagamentosMensais={contratoAtual?.pagamentosMensais || []} 
+            mesInicial={mesInicial}
+            anoInicial={anoInicial}
+          />
         </div>
       </main>
 
