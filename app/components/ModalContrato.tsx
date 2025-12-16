@@ -164,13 +164,13 @@ export default function ModalContrato({ onCriar, onFechar, contratoEditando }: M
                     </label>
                     <input
                       type="number"
-                      step="0.01"
+                      step="any"
                       min="0"
                       max="100"
                       value={percentualReajuste || ''}
                       onChange={(e) => setPercentualReajuste(parseFloat(e.target.value) || 0)}
                       className="w-full px-3 py-2 border-2 border-yellow-300 bg-white rounded-lg focus:border-yellow-500 focus:outline-none text-sm"
-                      placeholder="Ex: 5.5"
+                      placeholder="Ex: 5.5678"
                     />
                   </div>
 

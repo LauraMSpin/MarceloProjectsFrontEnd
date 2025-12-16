@@ -5,6 +5,8 @@ import ServicoForm from './components/ServicoForm';
 import ServicosTable from './components/ServicosTable';
 import Totais from './components/Totais';
 import CurvaSChart from './components/CurvaSChart';
+import GraficoGantt from './components/GraficoGantt';
+import CaminhoCritico from './components/CaminhoCritico';
 import ModalContrato from './components/ModalContrato';
 import ModalUsuario from './components/ModalUsuario';
 import ModalCompartilhar from './components/ModalCompartilhar';
@@ -29,6 +31,8 @@ export default function Home() {
   const [mostrarModalCompartilhar, setMostrarModalCompartilhar] = useState(false);
   const [contratoEditando, setContratoEditando] = useState<Contrato | null>(null);
   const [modoVisualizacao, setModoVisualizacao] = useState<'percentual' | 'real'>('percentual');
+  const [abaVisualizacao, setAbaVisualizacao] = useState<'original' | 'reajustado'>('original');
+  const [abaPrincipal, setAbaPrincipal] = useState<'tabela' | 'gantt' | 'critico'>('tabela');
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -109,10 +113,49 @@ export default function Home() {
   const usuarioAtual = usuarios.find(u => u.id === usuarioAtualId);
   // Todos os contratos já vêm filtrados pelo backend (próprios + compartilhados)
   const contratosDoUsuario = contratos;
-  const servicos = contratoAtual?.servicos || [];
+  const servicosOriginais = contratoAtual?.servicos || [];
   const numeroMeses = contratoAtual?.numeroMeses || 12;
   const mesInicial = contratoAtual?.mesInicial || new Date().getMonth() + 1;
   const anoInicial = contratoAtual?.anoInicial || new Date().getFullYear();
+
+  // Função para calcular serviços com reajuste aplicado
+  const calcularServicosReajustados = (servicosBase: Servico[]): Servico[] => {
+    const percentual = contratoAtual?.percentualReajuste || 0;
+    const mesInicio = contratoAtual?.mesInicioReajuste;
+    
+    if (percentual === 0 || mesInicio === null || mesInicio === undefined) {
+      return servicosBase;
+    }
+
+    const fator = 1 + (percentual / 100);
+    
+    return servicosBase.map(servico => ({
+      ...servico,
+      medicoes: servico.medicoes.map((medicao, index) => {
+        const mesNumero = index + 1;
+        if (mesNumero >= mesInicio) {
+          return {
+            ...medicao,
+            previsto: medicao.previsto * fator,
+            realizado: medicao.realizado * fator,
+          };
+        }
+        return medicao;
+      }),
+      valorTotal: servico.medicoes.reduce((sum, medicao, index) => {
+        const mesNumero = index + 1;
+        const valor = mesNumero >= mesInicio ? medicao.previsto * fator : medicao.previsto;
+        return sum + valor;
+      }, 0),
+    }));
+  };
+
+  // Serviços que serão exibidos (originais ou reajustados)
+  const servicosReajustados = calcularServicosReajustados(servicosOriginais);
+  const servicos = abaVisualizacao === 'reajustado' ? servicosReajustados : servicosOriginais;
+  
+  // Verifica se o contrato tem reajuste configurado
+  const temReajuste = (contratoAtual?.percentualReajuste || 0) > 0 && contratoAtual?.mesInicioReajuste !== null;
 
   // Recarregar contrato atual
   const recarregarContrato = useCallback(async () => {
@@ -683,14 +726,22 @@ export default function Home() {
 
         {/* Formulário */}
         {contratoAtual ? (
-          <ServicoForm 
-            onAddServico={handleAddServico} 
-            numMeses={numeroMeses}
-            mesInicial={mesInicial}
-            anoInicial={anoInicial}
-            editingServico={editandoIndex !== null ? servicos[editandoIndex] : null}
-            onCancelarEdicao={handleCancelarEdicao}
-          />
+          abaVisualizacao === 'original' ? (
+            <ServicoForm 
+              onAddServico={handleAddServico} 
+              numMeses={numeroMeses}
+              mesInicial={mesInicial}
+              anoInicial={anoInicial}
+              editingServico={editandoIndex !== null ? servicosOriginais[editandoIndex] : null}
+              onCancelarEdicao={handleCancelarEdicao}
+            />
+          ) : (
+            <div className="bg-green-100 border-2 border-green-400 rounded-xl p-4 sm:p-6 text-center">
+              <p className="text-green-800 font-semibold text-sm sm:text-base">
+                📈 Visualizando valores reajustados - Mude para "Valores Originais" para editar serviços
+              </p>
+            </div>
+          )
         ) : (
           <div className="bg-yellow-100 border-2 border-yellow-400 rounded-xl p-4 sm:p-8 text-center">
             <p className="text-lg sm:text-xl text-yellow-800 font-semibold mb-3 sm:mb-4">
@@ -711,35 +762,137 @@ export default function Home() {
         {/* Totais */}
         <Totais servicos={servicos} />
 
-        {/* Tabela */}
-        <div className="mt-6 sm:mt-8">
-          <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-800 mb-3 sm:mb-4">Serviços Cadastrados</h2>
-          <ServicosTable
-            servicos={servicos}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onUpdateMedicao={handleUpdateMedicao}
-            onUpdatePagamento={handleUpdatePagamento}
-            pagamentosMensais={contratoAtual?.pagamentosMensais || []}
-            numMeses={numeroMeses}
-            mesInicial={mesInicial}
-            anoInicial={anoInicial}
-            modoVisualizacao={modoVisualizacao}
-            onModoVisualizacaoChange={setModoVisualizacao}
-          />
+        {/* Abas principais: Tabela/Curva S ou Gráfico de Gantt ou Caminho Crítico */}
+        <div className="mt-6 sm:mt-8 bg-white rounded-xl shadow-md p-4">
+          <div className="flex items-center gap-4 flex-wrap justify-center">
+            <div className="flex gap-2 border-2 border-gray-300 rounded-lg p-1">
+              <button
+                onClick={() => setAbaPrincipal('tabela')}
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                  abaPrincipal === 'tabela'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                📋 Tabela e Curva S
+              </button>
+              <button
+                onClick={() => setAbaPrincipal('gantt')}
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                  abaPrincipal === 'gantt'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                📊 Gráfico de Gantt
+              </button>
+              <button
+                onClick={() => setAbaPrincipal('critico')}
+                className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                  abaPrincipal === 'critico'
+                    ? 'bg-purple-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                🔗 Caminho Crítico
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Curva S */}
-        <div className="mt-6 sm:mt-8">
-          <CurvaSChart 
-            servicos={servicos} 
-            numMeses={numeroMeses} 
-            modoVisualizacao={modoVisualizacao} 
-            pagamentosMensais={contratoAtual?.pagamentosMensais || []} 
-            mesInicial={mesInicial}
-            anoInicial={anoInicial}
-          />
-        </div>
+        {abaPrincipal === 'tabela' && (
+          <>
+            {/* Abas de visualização (Original vs Reajustado) */}
+            {temReajuste && (
+              <div className="mt-6 sm:mt-8 bg-white rounded-xl shadow-md p-4">
+                <div className="flex items-center gap-4 flex-wrap">
+                  <span className="font-semibold text-gray-700 text-sm sm:text-base">📊 Visualizar:</span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setAbaVisualizacao('original')}
+                      className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                        abaVisualizacao === 'original'
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      📋 Valores Originais
+                    </button>
+                    <button
+                      onClick={() => setAbaVisualizacao('reajustado')}
+                      className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
+                        abaVisualizacao === 'reajustado'
+                          ? 'bg-green-600 text-white'
+                          : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                      }`}
+                    >
+                      📈 Valores Reajustados ({contratoAtual?.percentualReajuste}% a partir do mês {contratoAtual?.mesInicioReajuste})
+                    </button>
+                  </div>
+                </div>
+                {abaVisualizacao === 'reajustado' && (
+                  <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-800">
+                    💡 Os valores exibidos incluem o reajuste de <strong>{contratoAtual?.percentualReajuste}%</strong> aplicado 
+                    a partir da <strong>Medição {contratoAtual?.mesInicioReajuste}</strong>.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Tabela */}
+            <div className="mt-6 sm:mt-8">
+              <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-800 mb-3 sm:mb-4">
+                Serviços Cadastrados
+                {abaVisualizacao === 'reajustado' && temReajuste && (
+                  <span className="ml-2 text-sm font-normal text-green-600">(Valores Reajustados)</span>
+                )}
+              </h2>
+              <ServicosTable
+                servicos={servicos}
+                onEdit={abaVisualizacao === 'original' ? handleEdit : undefined}
+                onDelete={abaVisualizacao === 'original' ? handleDelete : undefined}
+                onUpdateMedicao={abaVisualizacao === 'original' ? handleUpdateMedicao : undefined}
+                onUpdatePagamento={abaVisualizacao === 'original' ? handleUpdatePagamento : undefined}
+                pagamentosMensais={contratoAtual?.pagamentosMensais || []}
+                numMeses={numeroMeses}
+                modoVisualizacao={modoVisualizacao}
+                onModoVisualizacaoChange={setModoVisualizacao}
+                somenteVisualizacao={abaVisualizacao === 'reajustado'}
+              />
+            </div>
+
+            {/* Curva S */}
+            <div className="mt-6 sm:mt-8">
+              <CurvaSChart 
+                servicos={servicos} 
+                numMeses={numeroMeses} 
+                modoVisualizacao={modoVisualizacao} 
+                pagamentosMensais={contratoAtual?.pagamentosMensais || []} 
+                nomeContrato={contratoAtual?.nome || ''}
+              />
+            </div>
+          </>
+        )}
+
+        {abaPrincipal === 'gantt' && (
+          <div className="mt-6 sm:mt-8">
+            <GraficoGantt 
+              servicos={servicos} 
+              numMeses={numeroMeses}
+              nomeContrato={contratoAtual?.nome || ''}
+            />
+          </div>
+        )}
+
+        {abaPrincipal === 'critico' && (
+          <div className="mt-6 sm:mt-8">
+            <CaminhoCritico 
+              servicos={servicos} 
+              numMeses={numeroMeses}
+              nomeContrato={contratoAtual?.nome || ''}
+            />
+          </div>
+        )}
       </main>
 
       {/* Footer */}

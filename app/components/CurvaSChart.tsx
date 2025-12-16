@@ -18,8 +18,7 @@ interface CurvaSChartProps {
   numMeses?: number;
   modoVisualizacao: 'percentual' | 'real';
   pagamentosMensais?: PagamentoMensal[];
-  mesInicial?: number;
-  anoInicial?: number;
+  nomeContrato?: string;
 }
 
 export default function CurvaSChart({ 
@@ -27,8 +26,7 @@ export default function CurvaSChart({
   numMeses = 12, 
   modoVisualizacao, 
   pagamentosMensais = [],
-  mesInicial = 1,
-  anoInicial = new Date().getFullYear()
+  nomeContrato = ''
 }: CurvaSChartProps) {
   if (servicos.length === 0) {
     return (
@@ -41,18 +39,9 @@ export default function CurvaSChart({
     );
   }
 
-  const dadosOriginais = calcularCurvaS(servicos, numMeses, pagamentosMensais, mesInicial, anoInicial);
+  const dadosOriginais = calcularCurvaS(servicos, numMeses, pagamentosMensais);
   
-  // Calcular o mês de referência atual (quantos meses se passaram desde o início)
-  const agora = new Date();
-  const mesAtual = agora.getMonth() + 1; // 1-12
-  const anoAtual = agora.getFullYear();
-  
-  // Calcular quantos meses se passaram desde o início do contrato
-  const mesesDesdeInicio = (anoAtual - anoInicial) * 12 + (mesAtual - mesInicial) + 1;
-  const mesReferenciaAtual = Math.max(1, Math.min(mesesDesdeInicio, numMeses));
-  
-  // Encontrar o último mês com realizado preenchido (para quebrar a regra se houver dados futuros)
+  // Encontrar o último mês com realizado preenchido
   let ultimoMesComRealizado = 0;
   dadosOriginais.forEach((dado, index) => {
     if (dado.realizado > 0) {
@@ -60,50 +49,44 @@ export default function CurvaSChart({
     }
   });
   
-  // O limite é o maior entre: mês de referência atual OU último mês com realizado
-  const limiteExibicao = Math.max(mesReferenciaAtual, ultimoMesComRealizado);
+  // Encontrar o último mês com pago preenchido
+  let ultimoMesComPago = 0;
+  dadosOriginais.forEach((dado, index) => {
+    if (dado.pago > 0) {
+      ultimoMesComPago = index + 1;
+    }
+  });
   
   // Calcular valor total previsto para percentuais
   const valorTotalPrevisto = dadosOriginais.length > 0 
     ? dadosOriginais[dadosOriginais.length - 1].previstoAcumulado 
     : 0;
 
-  // Transformar dados para modo percentual e aplicar limite de exibição para realizado/pago
-  const dados = dadosOriginais.map((dado, index) => {
-    const mesNumero = index + 1;
-    const dentroDoLimite = mesNumero <= limiteExibicao;
-    
+  // Transformar dados para modo percentual
+  const dados = dadosOriginais.map((dado) => {
     return {
       ...dado,
-      // Realizado e pago são zerados após o limite
-      realizado: dentroDoLimite ? dado.realizado : 0,
-      pago: dentroDoLimite ? dado.pago : 0,
-      realizadoAcumulado: dentroDoLimite ? dado.realizadoAcumulado : (index > 0 ? dadosOriginais[limiteExibicao - 1]?.realizadoAcumulado || 0 : 0),
-      pagoAcumulado: dentroDoLimite ? dado.pagoAcumulado : (index > 0 ? dadosOriginais[limiteExibicao - 1]?.pagoAcumulado || 0 : 0),
       previstoPercentual: valorTotalPrevisto > 0 ? (dado.previsto / valorTotalPrevisto) * 100 : 0,
-      realizadoPercentual: valorTotalPrevisto > 0 ? ((dentroDoLimite ? dado.realizado : 0) / valorTotalPrevisto) * 100 : 0,
-      pagoPercentual: valorTotalPrevisto > 0 ? ((dentroDoLimite ? dado.pago : 0) / valorTotalPrevisto) * 100 : 0,
+      realizadoPercentual: valorTotalPrevisto > 0 ? (dado.realizado / valorTotalPrevisto) * 100 : 0,
+      pagoPercentual: valorTotalPrevisto > 0 ? (dado.pago / valorTotalPrevisto) * 100 : 0,
       previstoAcumuladoPercentual: valorTotalPrevisto > 0 ? (dado.previstoAcumulado / valorTotalPrevisto) * 100 : 0,
-      realizadoAcumuladoPercentual: valorTotalPrevisto > 0 ? ((dentroDoLimite ? dado.realizadoAcumulado : (dadosOriginais[limiteExibicao - 1]?.realizadoAcumulado || 0)) / valorTotalPrevisto) * 100 : 0,
-      pagoAcumuladoPercentual: valorTotalPrevisto > 0 ? ((dentroDoLimite ? dado.pagoAcumulado : (dadosOriginais[limiteExibicao - 1]?.pagoAcumulado || 0)) / valorTotalPrevisto) * 100 : 0,
-      // Flag para indicar se está além do limite (para ocultar na linha do gráfico)
-      aposLimite: !dentroDoLimite,
+      realizadoAcumuladoPercentual: valorTotalPrevisto > 0 ? (dado.realizadoAcumulado / valorTotalPrevisto) * 100 : 0,
+      pagoAcumuladoPercentual: valorTotalPrevisto > 0 ? (dado.pagoAcumulado / valorTotalPrevisto) * 100 : 0,
     };
   });
 
-  // Para o gráfico, criar dados que param no limite (linha não continua após o mês de referência)
+  // Para o gráfico, criar dados que mostram linhas apenas até onde há valores preenchidos
   const dadosGrafico = dados.map((dado, index) => {
     const mesNumero = index + 1;
-    if (mesNumero > limiteExibicao) {
-      return {
-        ...dado,
-        realizadoAcumulado: null,
-        pagoAcumulado: null,
-        realizadoAcumuladoPercentual: null,
-        pagoAcumuladoPercentual: null,
-      };
-    }
-    return dado;
+    return {
+      ...dado,
+      // Realizado só aparece até o último mês com valor preenchido
+      realizadoAcumulado: mesNumero <= ultimoMesComRealizado ? dado.realizadoAcumulado : null,
+      realizadoAcumuladoPercentual: mesNumero <= ultimoMesComRealizado ? dado.realizadoAcumuladoPercentual : null,
+      // Pago só aparece até o último mês com valor preenchido
+      pagoAcumulado: mesNumero <= ultimoMesComPago ? dado.pagoAcumulado : null,
+      pagoAcumuladoPercentual: mesNumero <= ultimoMesComPago ? dado.pagoAcumuladoPercentual : null,
+    };
   });
 
   const formatarValor = (valor: number) => {
@@ -133,7 +116,7 @@ export default function CurvaSChart({
   return (
     <div className="bg-white p-3 sm:p-6 rounded-xl shadow-lg">
       <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-800 mb-4 sm:mb-6">
-        Curva S - Acumulado {modoVisualizacao === 'percentual' ? '(%)' : '(R$)'}
+        Curva S {nomeContrato ? `- ${nomeContrato}` : ''} {modoVisualizacao === 'percentual' ? '(%)' : '(R$)'}
       </h2>
       
       <ResponsiveContainer width="100%" height={300} className="sm:hidden">
@@ -292,7 +275,7 @@ export default function CurvaSChart({
             </tr>
           </thead>
           <tbody>
-            {dados.map((dado, index) => {
+            {dadosOriginais.map((dado, index) => {
               const percentualExecucao = dado.previstoAcumulado > 0 
                 ? (dado.realizadoAcumulado / dado.previstoAcumulado) * 100 
                 : 0;
@@ -306,56 +289,22 @@ export default function CurvaSChart({
                     {dado.mes}
                   </td>
                   <td className="border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-right text-blue-600">
-                    {modoVisualizacao === 'percentual' ? (
-                      <>
-                        <span className="hidden sm:inline">{formatarPercentual(dado.previstoPercentual)}</span>
-                        <span className="sm:hidden">{dado.previstoPercentual.toFixed(1)}%</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="hidden sm:inline">{formatarValor(dado.previsto)}</span>
-                        <span className="sm:hidden">{formatarValorCurto(dado.previsto)}</span>
-                      </>
-                    )}
+                    {formatarValor(dado.previsto)}
                   </td>
                   <td className="border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-right text-green-600">
-                    {modoVisualizacao === 'percentual' ? (
-                      <>
-                        <span className="hidden sm:inline">{formatarPercentual(dado.realizadoPercentual)}</span>
-                        <span className="sm:hidden">{dado.realizadoPercentual.toFixed(1)}%</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="hidden sm:inline">{formatarValor(dado.realizado)}</span>
-                        <span className="sm:hidden">{formatarValorCurto(dado.realizado)}</span>
-                      </>
-                    )}
+                    {formatarValor(dado.realizado)}
+                  </td>
+                  <td className="border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-right text-orange-600">
+                    {formatarValor(dado.pago)}
                   </td>
                   <td className="border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-right font-bold text-blue-700">
-                    {modoVisualizacao === 'percentual' ? (
-                      <>
-                        <span className="hidden sm:inline">{formatarPercentual(dado.previstoAcumuladoPercentual)}</span>
-                        <span className="sm:hidden">{dado.previstoAcumuladoPercentual.toFixed(1)}%</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="hidden sm:inline">{formatarValor(dado.previstoAcumulado)}</span>
-                        <span className="sm:hidden">{formatarValorCurto(dado.previstoAcumulado)}</span>
-                      </>
-                    )}
+                    {formatarValor(dado.previstoAcumulado)}
                   </td>
                   <td className="border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-right font-bold text-green-700">
-                    {modoVisualizacao === 'percentual' ? (
-                      <>
-                        <span className="hidden sm:inline">{formatarPercentual(dado.realizadoAcumuladoPercentual)}</span>
-                        <span className="sm:hidden">{dado.realizadoAcumuladoPercentual.toFixed(1)}%</span>
-                      </>
-                    ) : (
-                      <>
-                        <span className="hidden sm:inline">{formatarValor(dado.realizadoAcumulado)}</span>
-                        <span className="sm:hidden">{formatarValorCurto(dado.realizadoAcumulado)}</span>
-                      </>
-                    )}
+                    {formatarValor(dado.realizadoAcumulado)}
+                  </td>
+                  <td className="border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-right font-bold text-orange-700">
+                    {formatarValor(dado.pagoAcumulado)}
                   </td>
                   <td className="border border-gray-300 px-2 sm:px-4 py-1.5 sm:py-2 text-right font-bold">
                     <span className={percentualExecucao >= 100 ? 'text-green-600' : percentualExecucao >= 75 ? 'text-yellow-600' : 'text-red-600'}>

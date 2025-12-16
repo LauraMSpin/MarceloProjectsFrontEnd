@@ -3,20 +3,18 @@
 import React from 'react';
 import { Servico, PagamentoMensal } from '../types';
 import { useState } from 'react';
-import { gerarMesesSequenciais } from '../utils/datas';
 
 interface ServicosTableProps {
   servicos: Servico[];
-  onEdit: (index: number) => void;
-  onDelete: (index: number) => void;
-  onUpdateMedicao: (servicoIndex: number, medicaoIndex: number, field: 'previsto' | 'realizado', valor: number) => void;
-  onUpdatePagamento: (ordem: number, mes: string, valor: number) => void;
+  onEdit?: (index: number) => void;
+  onDelete?: (index: number) => void;
+  onUpdateMedicao?: (servicoIndex: number, medicaoIndex: number, field: 'previsto' | 'realizado', valor: number) => void;
+  onUpdatePagamento?: (ordem: number, mes: string, valor: number) => void;
   pagamentosMensais: PagamentoMensal[];
   numMeses?: number;
-  mesInicial?: number;
-  anoInicial?: number;
   modoVisualizacao: 'percentual' | 'real';
   onModoVisualizacaoChange: (modo: 'percentual' | 'real') => void;
+  somenteVisualizacao?: boolean;
 }
 
 export default function ServicosTable({
@@ -27,10 +25,9 @@ export default function ServicosTable({
   onUpdatePagamento,
   pagamentosMensais,
   numMeses = 12,
-  mesInicial = 1,
-  anoInicial = new Date().getFullYear(),
   modoVisualizacao,
   onModoVisualizacaoChange,
+  somenteVisualizacao = false,
 }: ServicosTableProps) {
   const [editandoCelula, setEditandoCelula] = useState<{
     servicoIndex: number;
@@ -40,8 +37,8 @@ export default function ServicosTable({
   const [editandoPagamento, setEditandoPagamento] = useState<number | null>(null);
   const [valorTemp, setValorTemp] = useState<string>('');
   
-  // Gerar nomes dos meses reais
-  const nomesMeses = gerarMesesSequenciais(mesInicial, anoInicial, numMeses);
+  // Gerar nomes das medições
+  const nomesMeses = Array.from({ length: numMeses }, (_, i) => `Medição ${i + 1}`);
 
   const handleIniciarEdicao = (
     servicoIndex: number,
@@ -49,6 +46,7 @@ export default function ServicosTable({
     field: 'previsto' | 'realizado',
     valorAtual: number
   ) => {
+    if (somenteVisualizacao || !onUpdateMedicao) return;
     setEditandoCelula({ servicoIndex, medicaoIndex, field });
     setValorTemp(valorAtual.toString());
   };
@@ -57,12 +55,13 @@ export default function ServicosTable({
     ordem: number,
     valorAtual: number
   ) => {
+    if (somenteVisualizacao || !onUpdatePagamento) return;
     setEditandoPagamento(ordem);
     setValorTemp(valorAtual.toString());
   };
 
   const handleSalvarEdicao = () => {
-    if (editandoCelula) {
+    if (editandoCelula && onUpdateMedicao) {
       const valor = parseFloat(valorTemp);
       if (!isNaN(valor) && valor >= 0) {
         onUpdateMedicao(
@@ -74,7 +73,7 @@ export default function ServicosTable({
       }
       setEditandoCelula(null);
       setValorTemp('');
-    } else if (editandoPagamento !== null) {
+    } else if (editandoPagamento !== null && onUpdatePagamento) {
       const valor = parseFloat(valorTemp);
       if (!isNaN(valor) && valor >= 0) {
         const pagamento = pagamentosMensais.find(p => p.ordem === editandoPagamento);
@@ -311,22 +310,26 @@ export default function ServicosTable({
                       R$ {servico.valorTotal.toFixed(2)}
                     </td>
                     <td className={`px-4 py-2 text-sm text-center border ${bgColor}`} rowSpan={2}>
-                      <div className="flex gap-2 justify-center">
-                        <button
-                          onClick={() => onEdit(originalIndex)}
-                          className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-xs font-semibold transition transform hover:scale-105"
-                          title="Editar"
-                        >
-                          ✏️
-                        </button>
-                        <button
-                          onClick={() => onDelete(originalIndex)}
-                          className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs font-semibold transition transform hover:scale-105"
-                          title="Excluir"
-                        >
-                          🗑️
-                        </button>
-                      </div>
+                      {!somenteVisualizacao && onEdit && onDelete ? (
+                        <div className="flex gap-2 justify-center">
+                          <button
+                            onClick={() => onEdit(originalIndex)}
+                            className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-xs font-semibold transition transform hover:scale-105"
+                            title="Editar"
+                          >
+                            ✏️
+                          </button>
+                          <button
+                            onClick={() => onDelete(originalIndex)}
+                            className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-xs font-semibold transition transform hover:scale-105"
+                            title="Excluir"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400 text-xs">👁️ Somente visualização</span>
+                      )}
                     </td>
                   </tr>
                   
