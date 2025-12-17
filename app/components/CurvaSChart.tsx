@@ -146,7 +146,7 @@ export default function CurvaSChart({
             domain={modoVisualizacao === 'percentual' ? [0, 100] : undefined}
           />
           <Tooltip 
-            formatter={(value: number) => formatador(value)}
+            formatter={(value: number | undefined) => value !== undefined ? formatador(value) : ''}
             contentStyle={{
               backgroundColor: '#fff',
               border: '1px solid #ccc',
@@ -214,7 +214,7 @@ export default function CurvaSChart({
             domain={modoVisualizacao === 'percentual' ? [0, 100] : undefined}
           />
           <Tooltip 
-            formatter={(value: number) => formatador(value)}
+            formatter={(value: number | undefined) => value !== undefined ? formatador(value) : ''}
             contentStyle={{
               backgroundColor: '#fff',
               border: '1px solid #ccc',
