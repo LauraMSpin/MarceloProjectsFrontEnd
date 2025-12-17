@@ -6,7 +6,6 @@ import ServicosTable from './components/ServicosTable';
 import Totais from './components/Totais';
 import CurvaSChart from './components/CurvaSChart';
 import GraficoGantt from './components/GraficoGantt';
-import CaminhoCritico from './components/CaminhoCritico';
 import ModalContrato from './components/ModalContrato';
 import ModalUsuario from './components/ModalUsuario';
 import ModalCompartilhar from './components/ModalCompartilhar';
@@ -32,7 +31,7 @@ export default function Home() {
   const [contratoEditando, setContratoEditando] = useState<Contrato | null>(null);
   const [modoVisualizacao, setModoVisualizacao] = useState<'percentual' | 'real'>('percentual');
   const [abaVisualizacao, setAbaVisualizacao] = useState<'original' | 'reajustado'>('original');
-  const [abaPrincipal, setAbaPrincipal] = useState<'tabela' | 'gantt' | 'critico'>('tabela');
+  const [abaPrincipal, setAbaPrincipal] = useState<'tabela' | 'gantt'>('tabela');
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -762,7 +761,7 @@ export default function Home() {
         {/* Totais */}
         <Totais servicos={servicos} />
 
-        {/* Abas principais: Tabela/Curva S ou Gráfico de Gantt ou Caminho Crítico */}
+        {/* Abas principais: Tabela/Curva S ou Gráfico de Gantt */}
         <div className="mt-6 sm:mt-8 bg-white rounded-xl shadow-md p-4">
           <div className="flex items-center gap-4 flex-wrap justify-center">
             <div className="flex gap-2 border-2 border-gray-300 rounded-lg p-1">
@@ -785,16 +784,6 @@ export default function Home() {
                 }`}
               >
                 📊 Gráfico de Gantt
-              </button>
-              <button
-                onClick={() => setAbaPrincipal('critico')}
-                className={`px-4 py-2 rounded-lg font-semibold text-sm transition ${
-                  abaPrincipal === 'critico'
-                    ? 'bg-purple-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                🔗 Caminho Crítico
               </button>
             </div>
           </div>
@@ -877,16 +866,6 @@ export default function Home() {
         {abaPrincipal === 'gantt' && (
           <div className="mt-6 sm:mt-8">
             <GraficoGantt 
-              servicos={servicos} 
-              numMeses={numeroMeses}
-              nomeContrato={contratoAtual?.nome || ''}
-            />
-          </div>
-        )}
-
-        {abaPrincipal === 'critico' && (
-          <div className="mt-6 sm:mt-8">
-            <CaminhoCritico 
               servicos={servicos} 
               numMeses={numeroMeses}
               nomeContrato={contratoAtual?.nome || ''}
