@@ -1,5 +1,7 @@
 'use client';
 
+import { useRef, useCallback } from 'react';
+import * as htmlToImage from 'html-to-image';
 import { Servico, PagamentoMensal } from '../types';
 import { calcularCurvaS } from '../utils/curvaS';
 import {
@@ -28,6 +30,28 @@ export default function CurvaSChart({
   pagamentosMensais = [],
   nomeContrato = ''
 }: CurvaSChartProps) {
+  const chartRef = useRef<HTMLDivElement>(null);
+
+  const exportarPNG = useCallback(async () => {
+    if (!chartRef.current) return;
+    
+    try {
+      const dataUrl = await htmlToImage.toPng(chartRef.current, {
+        backgroundColor: '#ffffff',
+        quality: 1,
+        pixelRatio: 2,
+      });
+      
+      const link = document.createElement('a');
+      link.download = `curva-s${nomeContrato ? `-${nomeContrato.replace(/\s+/g, '-').toLowerCase()}` : ''}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (error) {
+      console.error('Erro ao exportar gráfico:', error);
+      alert('Erro ao exportar o gráfico. Tente novamente.');
+    }
+  }, [nomeContrato]);
+
   if (servicos.length === 0) {
     return (
       <div className="bg-white p-6 sm:p-12 rounded-xl shadow-lg text-center">
@@ -114,10 +138,19 @@ export default function CurvaSChart({
   const formatador = modoVisualizacao === 'percentual' ? formatarPercentual : formatarValor;
 
   return (
-    <div className="bg-white p-3 sm:p-6 rounded-xl shadow-lg">
-      <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-800 mb-4 sm:mb-6">
-        Curva S {nomeContrato ? `- ${nomeContrato}` : ''} {modoVisualizacao === 'percentual' ? '(%)' : '(R$)'}
-      </h2>
+    <div ref={chartRef} className="bg-white p-3 sm:p-6 rounded-xl shadow-lg">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6">
+        <h2 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-800">
+          Curva S {nomeContrato ? `- ${nomeContrato}` : ''} {modoVisualizacao === 'percentual' ? '(%)' : '(R$)'}
+        </h2>
+        <button
+          onClick={exportarPNG}
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all shadow-md text-sm font-medium"
+          title="Exportar como PNG"
+        >
+          📥 Salvar PNG
+        </button>
+      </div>
       
       <ResponsiveContainer width="100%" height={300} className="sm:hidden">
         <LineChart

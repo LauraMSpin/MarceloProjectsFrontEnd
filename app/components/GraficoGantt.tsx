@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
+import * as htmlToImage from 'html-to-image';
 import { Servico } from '../types';
 
 interface GraficoGanttProps {
@@ -11,6 +12,27 @@ interface GraficoGanttProps {
 
 export default function GraficoGantt({ servicos, numMeses, nomeContrato = '' }: GraficoGanttProps) {
   const [medicaoReferencia, setMedicaoReferencia] = useState<number>(1);
+  const ganttRef = useRef<HTMLDivElement>(null);
+
+  const exportarPNG = useCallback(async () => {
+    if (!ganttRef.current) return;
+    
+    try {
+      const dataUrl = await htmlToImage.toPng(ganttRef.current, {
+        backgroundColor: '#ffffff',
+        quality: 1,
+        pixelRatio: 2,
+      });
+      
+      const link = document.createElement('a');
+      link.download = `gantt${nomeContrato ? `-${nomeContrato.replace(/\s+/g, '-').toLowerCase()}` : ''}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (error) {
+      console.error('Erro ao exportar gráfico:', error);
+      alert('Erro ao exportar o gráfico. Tente novamente.');
+    }
+  }, [nomeContrato]);
 
   if (servicos.length === 0) {
     return (
@@ -96,12 +118,21 @@ export default function GraficoGantt({ servicos, numMeses, nomeContrato = '' }: 
 
   return (
     <div className="bg-white p-4 sm:p-6 rounded-xl shadow-lg">
-      <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-800 mb-4 sm:mb-6 text-center">
-        📊 Gráfico de Gantt {nomeContrato ? `- ${nomeContrato}` : ''}
-      </h3>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6">
+        <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-gray-800 text-center">
+          📊 Gráfico de Gantt {nomeContrato ? `- ${nomeContrato}` : ''}
+        </h3>
+        <button
+          onClick={exportarPNG}
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all shadow-md text-sm font-medium print:hidden"
+          title="Exportar como PNG"
+        >
+          📥 Salvar PNG
+        </button>
+      </div>
 
       {/* Seletor de Medição de Referência */}
-      <div className="flex flex-wrap gap-4 justify-center items-center mb-4 p-3 bg-purple-50 rounded-lg border border-purple-200">
+      <div className="flex flex-wrap gap-4 justify-center items-center mb-4 p-3 bg-purple-50 rounded-lg border border-purple-200 print:hidden">
         <label className="font-semibold text-gray-700 text-sm">
           📅 Medição de Referência:
         </label>
@@ -121,32 +152,39 @@ export default function GraficoGantt({ servicos, numMeses, nomeContrato = '' }: 
         </span>
       </div>
 
-      {/* Legenda */}
-      <div className="flex flex-wrap gap-4 justify-center mb-6">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-blue-200 border border-blue-300 rounded"></div>
-          <span className="text-sm text-gray-700">Período Previsto</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-green-500 rounded"></div>
-          <span className="text-sm text-gray-700">Realizado</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-1 bg-red-600 rounded"></div>
-          <span className="text-sm text-gray-700">Meta até Medição {medicaoReferencia}</span>
-        </div>
-      </div>
+      {/* Área do Gráfico para Exportação */}
+      <div ref={ganttRef} className="bg-white p-4 rounded-lg">
+        {/* Título para exportação */}
+        <h4 className="text-lg font-bold text-gray-800 text-center mb-4">
+          📊 Gráfico de Gantt {nomeContrato ? `- ${nomeContrato}` : ''} - Medição {medicaoReferencia}
+        </h4>
 
-      <div className="overflow-x-auto">
-        <div className="min-w-[800px]">
-          {/* Cabeçalho com meses */}
-          <div className="flex border-b-2 border-gray-300 pb-2 mb-2">
-            <div className="w-48 flex-shrink-0 font-semibold text-gray-700 text-sm px-2">
-              Serviço
-            </div>
-            <div className="w-16 flex-shrink-0 font-semibold text-gray-700 text-sm text-center">
-              % Prev.
-            </div>
+        {/* Legenda */}
+        <div className="flex flex-wrap gap-4 justify-center mb-6">
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-blue-200 border border-blue-300 rounded"></div>
+            <span className="text-sm text-gray-700">Período Previsto</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-green-500 rounded"></div>
+            <span className="text-sm text-gray-700">Realizado</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-1 bg-red-600 rounded"></div>
+            <span className="text-sm text-gray-700">Meta até Medição {medicaoReferencia}</span>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <div className="min-w-[800px]">
+            {/* Cabeçalho com meses */}
+            <div className="flex border-b-2 border-gray-300 pb-2 mb-2">
+              <div className="w-48 flex-shrink-0 font-semibold text-gray-700 text-sm px-2">
+                Serviço
+              </div>
+              <div className="w-16 flex-shrink-0 font-semibold text-gray-700 text-sm text-center">
+                % Prev.
+              </div>
             <div className="w-16 flex-shrink-0 font-semibold text-red-600 text-sm text-center" title={`Meta até Medição ${medicaoReferencia}`}>
               % Meta
             </div>
@@ -337,7 +375,9 @@ export default function GraficoGantt({ servicos, numMeses, nomeContrato = '' }: 
             <div className="flex-1"></div>
           </div>
         </div>
+        </div>
       </div>
+      {/* Fim da área do gráfico para exportação */}
 
       {/* Tabela de valores */}
       <div className="mt-6 overflow-x-auto">
