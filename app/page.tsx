@@ -510,7 +510,7 @@ export default function Home() {
       <div className="min-h-screen bg-gradient-to-br from-purple-100 via-blue-50 to-green-50 flex items-center justify-center">
         <div className="text-center bg-white p-8 rounded-xl shadow-lg max-w-md">
           <p className="text-red-600 text-lg mb-4">⚠️ {error}</p>
-          <p className="text-gray-600 text-sm">Verifique se o backend está rodando em http://localhost:5000</p>
+          <p className="text-gray-600 text-sm">Verifique se o backend está executando.</p>
           <button 
             onClick={() => window.location.reload()} 
             className="mt-4 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition"

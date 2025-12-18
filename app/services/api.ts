@@ -1,6 +1,6 @@
 import { Usuario, Contrato, Servico, Medicao, ContratoCompartilhado, PagamentoMensal } from '../types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api';
 
 // Função para obter headers com token de autenticação
 function getAuthHeaders(): HeadersInit {
